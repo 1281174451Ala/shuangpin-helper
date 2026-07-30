@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ShuangPin Helper",
+  "version": "0.1.0",
+  "identifier": "com.shuangpin.helper",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "双拼辅助键盘",
+        "width": 520,
+        "height": 360,
+        "resizable": true,
+        "alwaysOnTop": true,
+        "decorations": false,
+        "transparent": true
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all"
+  }
+}
