@@ -1,5 +1,9 @@
 # Repository Guidelines
 
+## 文档与协作方式
+
+`docs/` 目录下的所有文档必须使用中文编写，包括 ADR、术语表、设计说明和开发指引。项目同时用于学习新编程语言：以开发者自行实现功能代码为主，Agent 主要协助梳理需求、编写和维护文档、设计及实现测试用例；除非开发者明确要求，不主动代写功能实现。
+
 ## Project Structure & Module Organization
 
 This repository currently contains the product requirements in `prd.md`; implementation has not yet been scaffolded. Build the macOS MVP with Tauri 2, React + TypeScript, and Rust.
