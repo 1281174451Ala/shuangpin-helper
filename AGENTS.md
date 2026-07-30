@@ -6,16 +6,20 @@
 
 ## Project Structure & Module Organization
 
-This repository currently contains the product requirements in `prd.md`; implementation has not yet been scaffolded. Build the macOS MVP with Tauri 2, React + TypeScript, and Rust.
+This repository currently contains the product requirements in `prd.md`; implementation has not yet been scaffolded. Build the macOS MVP with Tauri 2, React + TypeScript, Tailwind CSS, and Rust.
 
 Keep frontend code under `src/`: `components/` for UI, `engine/` for mappings and state logic, and `store/` for shared state. Keep Tauri and macOS-facing Rust code under `src-tauri/`, and scheme data in `config/` (for example, `config/shuangpin.json`). Keep UI, input-state logic, and native code separate.
 
+The project uses Tailwind CSS for styling with utility-first approach. All styles are defined directly in component JSX using Tailwind utility classes. Global base styles are in `src/styles.css`.
+
 ## Build, Test, and Development Commands
 
-No package manifest or build tooling exists yet. When scaffolding Tauri, document the commands in `README.md` and use generated package scripts. Expected commands include:
+The project uses npm for frontend dependency management and Tauri CLI for desktop app development. Key commands:
 
 - `npm install` — install frontend dependencies.
-- `npm run tauri dev` — run the desktop app locally.
+- `npm test` — run Vitest unit tests.
+- `npm run build` — build frontend for production.
+- `npm run tauri dev` — run the desktop app locally in development mode.
 - `npm run tauri build` — create a production bundle.
 - `cargo test --manifest-path src-tauri/Cargo.toml` — run Rust tests.
 

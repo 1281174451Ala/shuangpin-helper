@@ -1,5 +1,5 @@
 import { Key } from "../Key/Key";
-import { getShuangpinKey } from "../../engine/shuangpin";
+import { getKeyMappings } from "../../engine/shuangpin";
 
 const keyboardRows = ["qwertyuiop", "asdfghjkl", "zxcvbnm"];
 
@@ -20,20 +20,21 @@ export const VirtualKeyboard = ({ enteredKey, availableKeys }: VirtualKeyboardPr
   const hasEnteredKey = Boolean(enteredKey);
 
   return (
-    <section aria-label="双拼虚拟键盘" className="keyboard">
+    <section aria-label="双拼虚拟键盘" className="grid gap-2">
       {keyboardRows.map((row) => (
-        <div className="keyboard__row" key={row}>
+        <div className="flex justify-center gap-1.5" key={row}>
           {[...row].map((letter) => {
-            const mapping = getShuangpinKey(letter);
+            const mappings = getKeyMappings(letter);
             const enabled = !hasEnteredKey || availableKeys.includes(letter) || letter === enteredKey;
 
             return (
               <Key
                 active={letter === enteredKey}
                 enabled={enabled}
+                finals={mappings.finals}
+                initial={mappings.initial}
                 key={letter}
                 label={letter}
-                mapping={mapping?.value}
               />
             );
           })}

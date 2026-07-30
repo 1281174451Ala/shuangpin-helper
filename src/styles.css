@@ -1,83 +1,24 @@
-:root {
-  color: #eef4ff;
-  background: transparent;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-* {
-  box-sizing: border-box;
-}
+@layer base {
+  :root {
+    color: #eef4ff;
+    background: transparent;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
 
-body {
-  margin: 0;
-  min-width: 320px;
-}
+  * {
+    box-sizing: border-box;
+  }
 
-button {
-  font: inherit;
-}
+  body {
+    margin: 0;
+    min-width: 320px;
+  }
 
-.app-shell {
-  width: min(520px, 100vw);
-  padding: 20px;
-  border: 1px solid rgb(255 255 255 / 18%);
-  border-radius: 18px;
-  background: rgb(20 28 43 / 92%);
-  box-shadow: 0 16px 40px rgb(0 0 0 / 25%);
-}
-
-.eyebrow {
-  margin: 0;
-  color: #8bb8ff;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-}
-
-h1 {
-  margin: 6px 0;
-  font-size: 24px;
-}
-
-header > p:last-child {
-  margin: 0 0 18px;
-  color: #b8c6de;
-  font-size: 14px;
-}
-
-.keyboard {
-  display: grid;
-  gap: 8px;
-}
-
-.keyboard__row {
-  display: flex;
-  justify-content: center;
-  gap: 6px;
-}
-
-.key {
-  display: grid;
-  width: 38px;
-  min-height: 48px;
-  padding: 5px;
-  border: 1px solid #52627f;
-  border-radius: 8px;
-  color: inherit;
-  background: #27344c;
-  cursor: default;
-}
-
-.key small {
-  color: #93bfff;
-  font-size: 10px;
-}
-
-.key:disabled {
-  opacity: 0.28;
-}
-
-.key--active {
-  border-color: #f6c85f;
-  background: #7a5b18;
+  button {
+    font: inherit;
+  }
 }

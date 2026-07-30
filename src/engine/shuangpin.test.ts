@@ -1,13 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { getShuangpinKey } from "./shuangpin";
+import { getKeyMappings } from "./shuangpin";
 
-describe("getShuangpinKey", () => {
-  it("returns the Xiaohe final mapped to a keyboard key", () => {
-    expect(getShuangpinKey("h")).toEqual({ key: "h", value: "ang", type: "final" });
+describe("getKeyMappings", () => {
+  it("returns both initial and final mappings for a key", () => {
+    expect(getKeyMappings("h")).toEqual({
+      key: "h",
+      initial: "h",
+      finals: "ang",
+    });
   });
 
-  it("returns undefined for an unmapped key", () => {
-    expect(getShuangpinKey("q")).toBeUndefined();
+  it("handles array finals by preserving the array", () => {
+    expect(getKeyMappings("r")).toEqual({
+      key: "r",
+      initial: "r",
+      finals: ["uan", "van"],
+    });
+  });
+
+  it("returns single final mapping as string", () => {
+    expect(getKeyMappings("q")).toEqual({
+      key: "q",
+      initial: "q",
+      finals: "iu",
+    });
   });
 });
 
