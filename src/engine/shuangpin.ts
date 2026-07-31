@@ -1,4 +1,5 @@
 import scheme from "../../config/shuangpin.json";
+import candidats from "../../config/syllables-candidates.json";
 
 /** 双拼键的分类。 */
 export type ShuangpinKeyType = "initial" | "final";
@@ -14,7 +15,7 @@ export interface ShuangpinKey {
 }
 
 /** 双拼方案的可配置映射。 */
-interface ShuangpinScheme {
+export interface ShuangpinScheme {
   /** 方案标识 */
   name: string;
   /** 声母键映射 */
@@ -23,30 +24,74 @@ interface ShuangpinScheme {
   finals: Record<string, string[]>;
 }
 
+/** 已审定的合法音节数据。 */
+export interface SyllableData {
+  /** 零声母拼写类别 */
+  zeroInitials: string[];
+  /** 声母类别到合法韵母集合的映射 */
+  syllables: Record<string, string[]>;
+}
+
 const shuangpinScheme = scheme as ShuangpinScheme;
 
 /**
- * 查询一个键对应的小鹤双拼映射。
- * @param key 要查询的英文字母键
- * @returns 映射信息；未配置时返回 undefined
+ * 根据方案和已审定音节数据预生成首键候选索引。
+ * @param shuangpin 双拼方案映射
+ * @param syllableData 合法音节数据
+ * @returns 物理首键到合法第二键集合的映射
  */
-export const getShuangpinKey = (key: string): ShuangpinKey | undefined => {
-  const normalizedKey = key.toLowerCase();
-  const initial = shuangpinScheme.initials[normalizedKey];
-
-  if (initial) {
-    return { key: normalizedKey, value: initial, type: "initial" };
+export const createCandidateIndex = (
+  shuangpin: ShuangpinScheme,
+  syllableData: SyllableData,
+): ReadonlyMap<string, ReadonlySet<string>> => {
+  for (const initial of syllableData.zeroInitials) {
+    if (!(initial in syllableData.syllables)) {
+      throw new Error(`Zero initial "${initial}" is missing syllable data`);
+    }
   }
 
-  const finals = shuangpinScheme.finals[normalizedKey];
-  if (finals && finals.length > 0) {
-    // 多个韵母用斜杠连接显示
-    const finalValue = finals.join("/");
-    return { key: normalizedKey, value: finalValue, type: "final" };
+  const finalToKey = new Map<string, string>(); // 韵母到物理键的反向映射
+
+  for (const [key, finals] of Object.entries(shuangpin.finals)) {
+    for (const final of finals) {
+      if (finalToKey.has(final)) {
+        throw new Error(`Final "${final}" maps to multiple keys`);
+      }
+
+      finalToKey.set(final, key);
+    }
   }
 
-  return undefined;
+  const candidateIndex = new Map<string, ReadonlySet<string>>(); // 首键到候选第二键集合
+  for (const [key, initial] of Object.entries(shuangpin.initials)) {
+    if (!(initial in syllableData.syllables)) {
+      throw new Error(`Initial "${initial}" is missing syllable data`);
+    }
+
+    const candidateKeys = new Set<string>();
+
+    for (const final of syllableData.syllables[initial]) {
+      const finalKey = finalToKey.get(final);
+      if (!finalKey) {
+        throw new Error(`Final "${final}" has no key mapping`);
+      }
+
+      candidateKeys.add(finalKey);
+    }
+
+    if (candidateKeys.size > 0) {
+      candidateIndex.set(key, candidateKeys);
+    }
+  }
+
+  return candidateIndex;
 };
+
+/** 已审定小鹤配置预生成的首键候选索引。 */
+export const xiaoheCandidateIndex = createCandidateIndex(
+  shuangpinScheme,
+  candidats as SyllableData,
+);
 
 /** 一个键的声母和韵母映射。 */
 export interface KeyMappings {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getKeyMappings } from "./shuangpin";
+import { getKeyMappings, xiaoheCandidateIndex } from "./shuangpin";
 
 describe("getKeyMappings", () => {
   it("returns both initial and final mappings for a key", () => {
@@ -27,3 +27,10 @@ describe("getKeyMappings", () => {
   });
 });
 
+describe("xiaoheCandidateIndex", () => {
+  it("contains a non-empty candidate set for every lowercase letter", () => {
+    const letters = "abcdefghijklmnopqrstuvwxyz";
+
+    expect([...letters].every((letter) => (xiaoheCandidateIndex.get(letter)?.size ?? 0) > 0)).toBe(true);
+  });
+});
