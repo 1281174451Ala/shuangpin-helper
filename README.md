@@ -36,10 +36,11 @@ npm run tauri build  # create production bundle
 
 ## Styling with Tailwind CSS
 
-This project uses Tailwind CSS for styling. Key files:
+This project uses **Tailwind CSS v4** for styling. Key files:
 
-- `tailwind.config.js` - Tailwind configuration
-- `postcss.config.js` - PostCSS configuration
-- `src/styles.css` - Tailwind directives and custom base styles
+- `src/styles.css` - Tailwind import and custom base styles
+- `postcss.config.js` - PostCSS configuration with `@tailwindcss/postcss`
+
+**Important:** Tailwind v4 uses `@import "tailwindcss"` instead of the v3 `@tailwind` directives. The `tailwind.config.js` file is optional in v4.
 
 All component styles use Tailwind utility classes directly in JSX.

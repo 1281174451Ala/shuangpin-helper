@@ -24,7 +24,7 @@ export const Key = ({ label, initial, finals, enabled, active }: KeyProps) => {
     <button
       aria-pressed={active}
       className={`
-        flex flex-col w-12 h-[60px] p-1.5 border rounded-lg text-inherit cursor-default
+        flex flex-col w-[80px] h-[80px] p-1.5 border rounded-lg text-inherit cursor-default
         ${active ? "border-[#f6c85f] bg-[#7a5b18]" : "border-[#52627f] bg-[#27344c]"}
         disabled:opacity-28
       `}
@@ -33,7 +33,7 @@ export const Key = ({ label, initial, finals, enabled, active }: KeyProps) => {
     >
       <div className="flex justify-between items-start mb-1">
         <span className="text-[15px] font-semibold">{label.toUpperCase()}</span>
-        {initial && <small className="text-[#93bfff] text-[11px]">{initial}</small>}
+        {initial && <small className="text-[#f2858c] text-[13px]">{initial}</small>}
       </div>
       {finalsArray && finalsArray.length > 0 && (
         <div className="flex flex-col items-center gap-1 w-full">

@@ -44,13 +44,15 @@ export const App = () => {
   }, []);
 
   return (
-    <main className="w-[min(520px,100vw)] p-5 border border-white/[0.18] rounded-[18px] bg-[rgb(20,28,43,0.92)] shadow-[0_16px_40px_rgb(0,0,0,0.25)]">
-      <header>
-        <p className="m-0 text-[#8bb8ff] text-xs font-bold tracking-widest">小鹤双拼</p>
-        <h1 className="my-1.5 text-2xl">双拼辅助键盘</h1>
-        <p className="mb-[18px] text-[#b8c6de] text-sm">{enteredKey ? `已输入 ${enteredKey.toUpperCase()}，请选择下一键` : "输入首键以查看合法候选"}</p>
-      </header>
-      <VirtualKeyboard availableKeys={availableKeys} enteredKey={enteredKey} />
+    <main className="flex items-center justify-center w-screen h-screen">
+      <div className="w-fit p-5 border border-white/[0.18] rounded-[18px] bg-[rgb(20,28,43,0.92)] shadow-[0_16px_40px_rgb(0,0,0,0.25)]">
+        {/* <header>
+          <p className="m-0 text-[#8bb8ff] text-xs font-bold tracking-widest">小鹤双拼</p>
+          <h1 className="my-1.5 text-2xl">双拼辅助键盘</h1>
+          <p className="mb-[18px] text-[#b8c6de] text-sm">{enteredKey ? `已输入 ${enteredKey.toUpperCase()}，请选择下一键` : "输入首键以查看合法候选"}</p>
+        </header> */}
+        <VirtualKeyboard availableKeys={availableKeys} enteredKey={enteredKey} />
+      </div>
     </main>
   );
 };

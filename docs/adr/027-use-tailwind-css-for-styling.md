@@ -97,14 +97,17 @@
 
 ## 实施
 
-1. 安装依赖：`npm install -D tailwindcss postcss autoprefixer`
-2. 创建配置：`tailwind.config.js` 和 `postcss.config.js`
-3. 替换样式：将自定义 CSS 类转换为 Tailwind 类
-4. 配置内容路径：`./src/**/*.{js,ts,jsx,tsx}`
+1. 安装依赖：`npm install -D tailwindcss@latest @tailwindcss/postcss postcss autoprefixer`
+2. 配置 PostCSS：在 `postcss.config.js` 中使用 `@tailwindcss/postcss`
+3. 导入 Tailwind：在 `src/styles.css` 中使用 `@import "tailwindcss"`
+4. 替换样式：将自定义 CSS 类转换为 Tailwind 类
 5. 更新文档：README.md 和 AGENTS.md
+
+**注意：** Tailwind v4 使用 `@import "tailwindcss"` 而不是 v3 的 `@tailwind` 指令。不再需要 `tailwind.config.js` 配置文件。
 
 ## 参考
 
-- [Tailwind CSS 官方文档](https://tailwindcss.com/)
+- [Tailwind CSS v4 官方文档](https://tailwindcss.com/)
+- [Tailwind v4 升级指南](https://tailwindcss.com/docs/upgrade-guide)
 - [Utility-First CSS](https://tailwindcss.com/docs/reusing-styles)
 - [Tailwind with Vite](https://tailwindcss.com/docs/guides/vite)

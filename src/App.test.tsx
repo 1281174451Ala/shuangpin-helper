@@ -6,6 +6,7 @@ describe("App", () => {
   it("renders the shuangpin learning keyboard", () => {
     render(<App />);
 
-    expect(screen.getByRole("heading", { name: "双拼辅助键盘" })).toBeInTheDocument();
+    // 检查虚拟键盘是否存在
+    expect(screen.getByRole("region", { name: "双拼虚拟键盘" })).toBeInTheDocument();
   });
 });
