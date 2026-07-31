@@ -19,8 +19,8 @@ interface ShuangpinScheme {
   name: string;
   /** 声母键映射 */
   initials: Record<string, string>;
-  /** 韵母键映射 */
-  finals: Record<string, string | string[]>;
+  /** 韵母键映射（统一为数组） */
+  finals: Record<string, string[]>;
 }
 
 const shuangpinScheme = scheme as ShuangpinScheme;
@@ -38,10 +38,10 @@ export const getShuangpinKey = (key: string): ShuangpinKey | undefined => {
     return { key: normalizedKey, value: initial, type: "initial" };
   }
 
-  const final = shuangpinScheme.finals[normalizedKey];
-  if (final) {
-    // 将数组转为字符串显示
-    const finalValue = Array.isArray(final) ? final.join("/") : final;
+  const finals = shuangpinScheme.finals[normalizedKey];
+  if (finals && finals.length > 0) {
+    // 多个韵母用斜杠连接显示
+    const finalValue = finals.join("/");
     return { key: normalizedKey, value: finalValue, type: "final" };
   }
 
@@ -54,8 +54,8 @@ export interface KeyMappings {
   key: string;
   /** 声母映射（如果有） */
   initial?: string;
-  /** 韵母映射（如果有） */
-  finals?: string | string[];
+  /** 韵母映射（如果有，统一为数组） */
+  finals?: string[];
 }
 
 /**

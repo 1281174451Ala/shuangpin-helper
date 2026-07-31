@@ -6,11 +6,11 @@ describe("getKeyMappings", () => {
     expect(getKeyMappings("h")).toEqual({
       key: "h",
       initial: "h",
-      finals: "ang",
+      finals: ["ang"],
     });
   });
 
-  it("handles array finals by preserving the array", () => {
+  it("handles multiple finals in array", () => {
     expect(getKeyMappings("r")).toEqual({
       key: "r",
       initial: "r",
@@ -18,11 +18,11 @@ describe("getKeyMappings", () => {
     });
   });
 
-  it("returns single final mapping as string", () => {
+  it("returns single final mapping as array", () => {
     expect(getKeyMappings("q")).toEqual({
       key: "q",
       initial: "q",
-      finals: "iu",
+      finals: ["iu"],
     });
   });
 });
