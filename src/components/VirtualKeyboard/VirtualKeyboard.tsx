@@ -1,14 +1,13 @@
 import { Key } from "../Key/Key";
 import { getKeyMappings } from "../../engine/shuangpin";
+import type { InputState } from "../../engine/stateMachine";
 
 const keyboardRows = ["qwertyuiop", "asdfghjkl", "zxcvbnm"];
 
 /** 虚拟键盘的状态参数。 */
 interface VirtualKeyboardProps {
-  /** 当前已输入的第一个双拼键 */
-  enteredKey?: string;
-  /** 在输入首键后仍可输入的字母键 */
-  availableKeys: string[];
+  /** 当前双拼输入状态 */
+  inputState: InputState;
 }
 
 /**
@@ -16,21 +15,23 @@ interface VirtualKeyboardProps {
  * @param props 当前输入及候选按键状态
  * @returns 虚拟键盘元素
  */
-export const VirtualKeyboard = ({ enteredKey, availableKeys }: VirtualKeyboardProps) => {
-  const hasEnteredKey = Boolean(enteredKey);
-
+export const VirtualKeyboard = ({ inputState }: VirtualKeyboardProps) => {
   return (
     <section aria-label="双拼虚拟键盘" className="grid gap-2">
       {keyboardRows.map((row) => (
         <div className="flex justify-center gap-1.5" key={row}>
           {[...row].map((letter) => {
             const mappings = getKeyMappings(letter);
-            const enabled = !hasEnteredKey || availableKeys.includes(letter) || letter === enteredKey;
+            const isWaitingForSecondKey = inputState.phase === "waitingSecondKey";
+            const displayState = !isWaitingForSecondKey
+              ? "default"
+              : inputState.candidateKeys.has(letter)
+                ? "candidate"
+                : "disabled";
 
             return (
               <Key
-                active={letter === enteredKey}
-                enabled={enabled}
+                displayState={displayState}
                 finals={mappings.finals}
                 initial={mappings.initial}
                 key={letter}
