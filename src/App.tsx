@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { VirtualKeyboard } from "./components/VirtualKeyboard/VirtualKeyboard";
 import { xiaoheCandidateIndex } from "./engine/shuangpin";
 import {
@@ -40,6 +42,36 @@ const normalizeKeyboardEvent = (event: KeyboardEvent): InputEvent | null => {
   return null;
 };
 
+/** Rust 后端发来的全局按键事件协议。 */
+type RustKeyEvent =
+  | { type: "letter"; key: string }
+  | { type: "backspace" }
+  | { type: "escape" }
+  | { type: "space" }
+  | { type: "enter" };
+
+/**
+ * 将 Rust 全局按键事件转换为前端状态机事件。
+ * @param event Rust 后端事件
+ * @returns 状态机事件；不支持的事件返回 null
+ */
+const rustEventToInputEvent = (event: RustKeyEvent): InputEvent | null => {
+  switch (event.type) {
+    case "letter":
+      return { type: "letter", key: event.key };
+    case "backspace":
+      return { type: "backspace" };
+    case "escape":
+      return { type: "escape" };
+    case "space":
+      return { type: "space" };
+    case "enter":
+      return { type: "enter" };
+    default:
+      return null;
+  }
+};
+
 const transition = createStateMachine(xiaoheCandidateIndex);
 
 /**
@@ -47,16 +79,64 @@ const transition = createStateMachine(xiaoheCandidateIndex);
  * @returns 应用根元素
  */
 export const App = () => {
-  const [inputState, setInputState] = useState<InputState>({ phase: "idle" }); //当前双拼输入状态
+  const [inputState, setInputState] = useState<InputState>({ phase: "idle" });
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [isListening, setIsListening] = useState(false);
 
-  //监听应用内键盘输入以展示状态流转
+  // 初始化：查询权限、订阅 Rust 全局按键事件（不自动启动监听，避免一打开 App 就注册系统钩子）
   useEffect(() => {
-    /**
-     * 将浏览器键盘事件交给纯状态机处理。
-     * @param event 浏览器键盘事件
-     */
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+
+    const setup = async () => {
+      try {
+        const permission = await invoke<boolean>("get_accessibility_permission");
+        setHasPermission(permission);
+
+        if (!permission) {
+          // 尝试弹出系统提示；对从终端启动的 dev 二进制通常不会弹窗
+          await invoke("request_accessibility_permission");
+          const granted = await invoke<boolean>("get_accessibility_permission");
+          setHasPermission(granted);
+        }
+
+        const sub = await listen<RustKeyEvent>("key-event", (event) => {
+          console.log("[来源:Rust 全局监听] key-event:", JSON.stringify(event.payload));
+          const inputEvent = rustEventToInputEvent(event.payload);
+          if (inputEvent) {
+            setInputState((currentState) => transition(currentState, inputEvent));
+          }
+        });
+
+        // StrictMode 下 effect 会执行两次：若第一次的订阅在卸载后才建立，立即取消，避免重复订阅
+        if (disposed) {
+          sub();
+        } else {
+          unlisten = sub;
+        }
+      } catch (error) {
+        console.warn("Tauri 后端未连接，使用浏览器键盘事件作为 fallback", error);
+      }
+    };
+
+    setup();
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
+  // 监听应用内键盘输入，仅作为全局监听未启动时的 fallback
+  // （全局监听启动后若仍监听 window keydown 会导致同一按键触发两次事件）
+  useEffect(() => {
+    if (isListening) {
+      return;
+    }
+
     const handleKeyDown = (event: KeyboardEvent) => {
       const inputEvent = normalizeKeyboardEvent(event);
+      console.log("[来源:浏览器 keydown]", event.key, inputEvent);
       if (!inputEvent) {
         return;
       }
@@ -66,16 +146,67 @@ export const App = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [isListening]);
+
+  const handleOpenSettings = () => {
+    invoke("open_accessibility_settings");
+  };
+
+  const handleRefreshPermission = async () => {
+    const granted = await invoke<boolean>("get_accessibility_permission");
+    setHasPermission(granted);
+  };
+
+  const handleStartListening = async () => {
+    try {
+      const started = await invoke<boolean>("start_key_listener");
+      setIsListening(started);
+    } catch (error) {
+      console.error("启动全局监听失败", error);
+    }
+  };
 
   return (
-    <main className="flex items-center justify-center w-screen h-screen">
+    <main className="flex flex-col items-center justify-center w-screen h-screen">
       <div className="w-fit p-5 border border-white/[0.18] rounded-[18px] bg-[rgb(20,28,43,0.92)] shadow-[0_16px_40px_rgb(0,0,0,0.25)]">
-        {/* <header>
-          <p className="m-0 text-[#8bb8ff] text-xs font-bold tracking-widest">小鹤双拼</p>
-          <h1 className="my-1.5 text-2xl">双拼辅助键盘</h1>
-          <p className="mb-[18px] text-[#b8c6de] text-sm">{enteredKey ? `已输入 ${enteredKey.toUpperCase()}，请选择下一键` : "输入首键以查看合法候选"}</p>
-        </header> */}
+        {hasPermission === false && (
+          <div className="mb-4 px-3 py-2 rounded-lg bg-yellow-500/20 text-yellow-200 text-xs">
+            <p className="mb-2">需要 macOS 辅助功能权限才能监听全局键盘。</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleOpenSettings}
+                className="px-2 py-1 rounded bg-yellow-500/30 hover:bg-yellow-500/50 transition-colors"
+              >
+                打开系统设置
+              </button>
+              <button
+                type="button"
+                onClick={handleRefreshPermission}
+                className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 transition-colors"
+              >
+                已授权，刷新
+              </button>
+            </div>
+          </div>
+        )}
+        {hasPermission === true && !isListening && (
+          <div className="mb-4 px-3 py-2 rounded-lg bg-blue-500/20 text-blue-200 text-xs">
+            <p className="mb-2">已获取权限。全局监听需要手动启动。</p>
+            <button
+              type="button"
+              onClick={handleStartListening}
+              className="px-2 py-1 rounded bg-blue-500/30 hover:bg-blue-500/50 transition-colors"
+            >
+              启动全局监听
+            </button>
+          </div>
+        )}
+        {isListening && (
+          <div className="mb-4 px-3 py-2 rounded-lg bg-green-500/20 text-green-200 text-xs">
+            全局监听运行中
+          </div>
+        )}
         <VirtualKeyboard inputState={inputState} />
       </div>
     </main>
