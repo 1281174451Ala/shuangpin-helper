@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { VirtualKeyboard } from "./components/VirtualKeyboard/VirtualKeyboard";
 import { xiaoheCandidateIndex } from "./engine/shuangpin";
 import {
@@ -166,9 +167,21 @@ export const App = () => {
     }
   };
 
+  const handleMouseDown = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    // 点击到按钮、输入框等交互元素时不触发拖拽
+    if (target.closest("input, select, textarea")) return;
+    getCurrentWindow().startDragging();
+  };
+
   return (
-    <main className="flex flex-col items-center justify-center w-screen h-screen">
+    <main
+      onMouseDown={handleMouseDown}
+      className="flex flex-col items-center justify-center w-screen h-screen select-none"
+    >
       <div className="w-fit p-5 border border-white/[0.18] rounded-[18px] bg-[rgb(20,28,43,0.92)] shadow-[0_16px_40px_rgb(0,0,0,0.25)]">
+        {/* 权限调试面板（临时注释以测试布局，排查滚动条问题） */}
+        {/*
         {hasPermission === false && (
           <div className="mb-4 px-3 py-2 rounded-lg bg-yellow-500/20 text-yellow-200 text-xs">
             <p className="mb-2">需要 macOS 辅助功能权限才能监听全局键盘。</p>
@@ -207,6 +220,7 @@ export const App = () => {
             全局监听运行中
           </div>
         )}
+        */}
         <VirtualKeyboard inputState={inputState} />
       </div>
     </main>
