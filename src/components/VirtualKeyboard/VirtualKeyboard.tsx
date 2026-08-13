@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { Key } from "../Key/Key";
 import { getKeyMappings } from "../../engine/shuangpin";
 import type { InputState } from "../../engine/stateMachine";
@@ -18,7 +19,7 @@ interface VirtualKeyboardProps {
 export const VirtualKeyboard = ({ inputState }: VirtualKeyboardProps) => {
   return (
     <section aria-label="双拼虚拟键盘" className="grid gap-2">
-      {keyboardRows.map((row) => (
+      {keyboardRows.map((row, rowIndex) => (
         <div className="flex justify-center gap-1.5" key={row}>
           {[...row].map((letter) => {
             const mappings = getKeyMappings(letter);
@@ -39,6 +40,15 @@ export const VirtualKeyboard = ({ inputState }: VirtualKeyboardProps) => {
               />
             );
           })}
+          {rowIndex === keyboardRows.length - 1 && (
+            <Key
+              displayState="exit"
+              finals={["关闭"]}
+              key="exit"
+              label="EXIT"
+              onClick={() => invoke("exit_app").catch(console.error)}
+            />
+          )}
         </div>
       ))}
     </section>

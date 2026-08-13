@@ -17,7 +17,8 @@ pub fn run() {
       request_accessibility_permission,
       open_accessibility_settings,
       start_key_listener,
-      get_listener_status
+      get_listener_status,
+      exit_app
     ])
     .run(tauri::generate_context!())
     .expect("error while running ShuangPin Helper");
@@ -56,4 +57,10 @@ fn start_key_listener(app: AppHandle) -> bool {
 #[tauri::command]
 fn get_listener_status() -> bool {
   key_listener::is_listening()
+}
+
+/// 退出应用程序。
+#[tauri::command]
+fn exit_app(app: AppHandle) {
+  app.exit(0);
 }
