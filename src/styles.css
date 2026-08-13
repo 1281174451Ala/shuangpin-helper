@@ -5,6 +5,8 @@
     color: #eef4ff;
     background: transparent;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    /* 运行时由 App.tsx 的 ResizeObserver 根据卡片实际内容区计算并覆盖 */
+    --key-size: 60px;
   }
 
   * {
@@ -14,6 +16,7 @@
   body {
     margin: 0;
     min-width: 320px;
+    overflow: hidden;
   }
 
   button {

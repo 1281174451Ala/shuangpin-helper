@@ -25,22 +25,24 @@ export const Key = ({ label, initial, finals, displayState }: KeyProps) => {
   return (
     <button
       aria-pressed={isCandidate}
+      style={{ width: 'var(--key-size)', height: 'var(--key-size)', fontSize: 'var(--key-size)' }}
       className={`
-        flex flex-col w-[80px] h-[80px] p-1.5 border rounded-lg text-inherit cursor-default
+        flex flex-col p-[0.075em] border rounded-[0.1em] text-inherit cursor-default
         ${isCandidate ? "border-[#f6c85f] bg-[#7a5b18]" : "border-[#52627f] bg-[#27344c]"}
         disabled:opacity-28
       `}
       disabled={isDisabled}
       type="button"
     >
-      <div className="flex justify-between items-start mb-1">
-        <span className="text-[15px] font-semibold">{label.toUpperCase()}</span>
-        {initial && <small className="text-[#f2858c] text-[13px]">{initial}</small>}
+      <div className="flex justify-between items-start mb-[0.05em]">
+        <span className="text-[0.1875em] font-semibold">{label.toUpperCase()}</span>
+        {/* 候选时不显示声母 */}
+        {!isCandidate && initial && <small className="text-[#f2858c] text-[0.1625em]">{initial}</small>}
       </div>
       {finals && finals.length > 0 && (
-        <div className="flex flex-col items-center gap-1 w-full">
+        <div className="flex flex-col items-center gap-[0.05em] w-full">
           {finals.map((final, index) => (
-            <small key={index} className="text-[#93bfff] text-[11px] leading-normal">
+            <small key={index} className={`text-[#93bfff] ${isCandidate ? 'text-[0.15em]' : 'text-[0.1375em]'}  leading-normal`}>
               {final}
             </small>
           ))}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -83,6 +83,29 @@ export const App = () => {
   const [inputState, setInputState] = useState<InputState>({ phase: "idle" });
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [isListening, setIsListening] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  // 根据卡片实际内容区（已扣除 padding）动态计算按键大小，使键盘始终与窗口等比匹配
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+
+    const computeKeySize = () => {
+      const style = getComputedStyle(el);
+      const padX = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+      const padY = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+      const keySize = Math.min(
+        (el.clientWidth - padX - 54) / 10, // 10 列按键 + 9×6px 水平间隙
+        (el.clientHeight - padY - 16) / 3, // 3 行按键 + 2×8px 垂直间隙
+      );
+      el.style.setProperty("--key-size", `${Math.floor(keySize)}px`);
+    };
+
+    computeKeySize();
+    const observer = new ResizeObserver(computeKeySize);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   // 初始化：查询权限、订阅 Rust 全局按键事件（不自动启动监听，避免一打开 App 就注册系统钩子）
   useEffect(() => {
@@ -179,7 +202,10 @@ export const App = () => {
       onMouseDown={handleMouseDown}
       className="flex flex-col items-center justify-center w-screen h-screen select-none"
     >
-      <div className="w-fit p-5 border border-white/[0.18] rounded-[18px] bg-[rgb(20,28,43,0.92)] shadow-[0_16px_40px_rgb(0,0,0,0.25)]">
+      <div
+        ref={cardRef}
+        className="w-full h-full p-2 border border-white/[0.18] rounded-[18px] bg-[rgb(20,28,43,0.92)] shadow-[0_16px_40px_rgb(0,0,0,0.25)] flex flex-col items-center justify-center"
+      >
         {/* 权限调试面板（临时注释以测试布局，排查滚动条问题） */}
         {/*
         {hasPermission === false && (
