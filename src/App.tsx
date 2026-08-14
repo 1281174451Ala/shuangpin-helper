@@ -194,7 +194,9 @@ export const App = () => {
     const target = e.target as HTMLElement;
     // 点击到按钮、输入框等交互元素时不触发拖拽
     if (target.closest("input, select, textarea")) return;
-    getCurrentWindow().startDragging();
+    const win = getCurrentWindow();
+    win.setFocus();
+    win.startDragging();
   };
 
   return (
