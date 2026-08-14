@@ -1,3 +1,5 @@
+import type { MouseEvent } from "react";
+
 /** 虚拟按键的展示状态。 */
 export type KeyDisplayState = "default" | "candidate" | "disabled" | "exit";
 
@@ -25,10 +27,19 @@ export const Key = ({ label, initial, finals, displayState, onClick }: KeyProps)
   const isDisabled = displayState === "disabled"; //是否为不可用键
   const isExit = displayState === "exit"; //是否为退出键
 
+  /**
+   * 阻止可点击的特殊按键触发外层窗口拖动。
+   * @param event 按键的鼠标按下事件
+   */
+  const handleMouseDown = (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+  };
+
   return (
     <button
       aria-pressed={isCandidate}
       onClick={onClick}
+      onMouseDown={onClick ? handleMouseDown : undefined}
       style={{ width: 'var(--key-size)', height: 'var(--key-size)', fontSize: 'var(--key-size)' }}
       className={`
         flex flex-col p-[0.075em] border rounded-[0.1em] text-inherit
