@@ -56,7 +56,7 @@ export const createStateMachine = (candidateIndex: CandidateIndex): StateTransit
   return (state, event) => {
     if (
       state.phase === "waitingSecondKey" &&
-      (event.type === "backspace" || event.type === "escape" || event.type === "enter" || event.type === "reset")
+      (event.type === "backspace" || event.type === "escape" || event.type === "enter" || event.type === "reset" || event.type === "space")
     ) {
       return { phase: "idle" };
     }
