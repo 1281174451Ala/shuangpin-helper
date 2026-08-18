@@ -103,19 +103,23 @@ export interface KeyMappings {
   finals?: string[];
 }
 
+/** 模块级缓存：26 个字母的映射在加载时一次性计算，后续调用零分配。 */
+const keyMappingsCache = new Map<string, KeyMappings>();
+
+for (const ch of "abcdefghijklmnopqrstuvwxyz") {
+  keyMappingsCache.set(ch, {
+    key: ch,
+    initial: shuangpinScheme.initials[ch],
+    finals: shuangpinScheme.finals[ch],
+  });
+}
+
 /**
- * 查询一个键的声母和韵母映射。
+ * 查询一个键的声母和韵母映射（结果来自模块级缓存，无运行时分配）。
  * @param key 要查询的英文字母键
  * @returns 包含声母和韵母的映射信息
  */
 export const getKeyMappings = (key: string): KeyMappings => {
   const normalizedKey = key.toLowerCase();
-  const initial = shuangpinScheme.initials[normalizedKey];
-  const finals = shuangpinScheme.finals[normalizedKey];
-
-  return {
-    key: normalizedKey,
-    initial,
-    finals,
-  };
+  return keyMappingsCache.get(normalizedKey) ?? { key: normalizedKey };
 };

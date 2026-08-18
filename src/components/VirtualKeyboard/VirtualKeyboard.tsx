@@ -1,9 +1,16 @@
+import { memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Key } from "../Key/Key";
 import { getKeyMappings } from "../../engine/shuangpin";
 import type { InputState } from "../../engine/stateMachine";
 
 const keyboardRows = ["qwertyuiop", "asdfghjkl", "zxcvbnm"];
+
+/** 退出键的韵母标签——模块级常量，保证引用稳定以配合 React.memo。 */
+const exitFinals = ["关闭"];
+
+/** 退出键的点击回调——模块级常量，避免每次渲染创建新函数引用。 */
+const handleExit = () => invoke("exit_app").catch(console.error);
 
 /** 虚拟键盘的状态参数。 */
 interface VirtualKeyboardProps {
@@ -16,7 +23,7 @@ interface VirtualKeyboardProps {
  * @param props 当前输入及候选按键状态
  * @returns 虚拟键盘元素
  */
-export const VirtualKeyboard = ({ inputState }: VirtualKeyboardProps) => {
+export const VirtualKeyboard = memo(({ inputState }: VirtualKeyboardProps) => {
   return (
     <section aria-label="双拼虚拟键盘" className="grid gap-2">
       {keyboardRows.map((row, rowIndex) => (
@@ -44,14 +51,14 @@ export const VirtualKeyboard = ({ inputState }: VirtualKeyboardProps) => {
           {rowIndex === keyboardRows.length - 1 && (
             <Key
               displayState="exit"
-              finals={["关闭"]}
+              finals={exitFinals}
               key="exit"
               label="EXIT"
-              onClick={() => invoke("exit_app").catch(console.error)}
+              onClick={handleExit}
             />
           )}
         </div>
       ))}
     </section>
   );
-};
+});

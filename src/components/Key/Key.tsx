@@ -1,4 +1,4 @@
-import type { MouseEvent } from "react";
+import { memo, type MouseEvent } from "react";
 
 /** 虚拟按键的展示状态。 */
 export type KeyDisplayState = "default" | "candidate" | "disabled" | "exit";
@@ -24,7 +24,7 @@ interface KeyProps {
  * @param props 虚拟按键的显示状态
  * @returns 虚拟按键元素
  */
-export const Key = ({ label, initial, finals, displayState, candidateMode = false, onClick }: KeyProps) => {
+export const Key = memo(({ label, initial, finals, displayState, candidateMode = false, onClick }: KeyProps) => {
   const isCandidate = displayState === "candidate"; //是否为候选第二键
   const isDisabled = displayState === "disabled"; //是否为不可用键
   const isExit = displayState === "exit"; //是否为退出键
@@ -77,4 +77,4 @@ export const Key = ({ label, initial, finals, displayState, candidateMode = fals
       )}
     </button>
   );
-};
+});
