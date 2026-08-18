@@ -13,7 +13,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["macos-private-api", "wry"] }
+tauri = { version = "2", features = ["macos-private-api", "wry", "tray-icon", "image-png"] }
 macos-accessibility-client = "0.0.2"
 # rdev 0.5.3 在 macOS 26 上会因非主线程调用 TSMGetInputSourceProperty 而崩溃，
 # 官方 PR #147 已修复但 crates.io 尚未发版，因此固定到已验证修复的 git rev
