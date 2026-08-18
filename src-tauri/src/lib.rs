@@ -75,6 +75,10 @@ pub fn run() {
 
       // 关闭窗口时隐藏到托盘而非退出
       if let Some(window) = app.get_webview_window("main") {
+        // 关闭 NSWindow 原生矩形阴影：透明窗口 + CSS border-radius 时，
+        // 原生阴影仍为矩形，会在圆角外露出灰色直角线。
+        // 改由前端 filter: drop-shadow 提供跟随圆角的阴影。
+        let _ = window.set_shadow(false);
         let win = window.clone();
         window.on_window_event(move |event| {
           if let tauri::WindowEvent::CloseRequested { api, .. } = event {

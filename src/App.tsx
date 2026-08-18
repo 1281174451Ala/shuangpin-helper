@@ -246,11 +246,12 @@ export const App = () => {
   return (
     <main
       onMouseDown={handleMouseDown}
-      className="flex flex-col items-center justify-center w-screen h-screen select-none"
+      className="flex flex-col items-center justify-center w-screen h-screen p-2 select-none"
+      style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.4))" }}
     >
       <div
         ref={cardRef}
-        className="w-full h-full p-2 border border-white/[0.18] rounded-none bg-[rgb(20,28,43,0.92)] flex flex-col items-center justify-center"
+        className="w-full h-full p-2 border border-white/[0.18] rounded-2xl bg-[rgb(20,28,43,0.92)] flex flex-col items-center justify-center"
       >
         {/* 权限调试面板（临时注释以测试布局，排查滚动条问题） */}
         {/*
