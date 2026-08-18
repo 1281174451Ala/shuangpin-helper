@@ -3,3 +3,7 @@ dist/
 src-tauri/target/
 .DS_Store
 
+# WorkBuddy agent workspace (local tooling, not part of the project)
+.agents/
+.workbuddy/
+
