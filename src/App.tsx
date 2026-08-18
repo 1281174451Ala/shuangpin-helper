@@ -206,7 +206,7 @@ export const App = () => {
     >
       <div
         ref={cardRef}
-        className="w-full h-full p-2 border border-white/[0.18] rounded-[18px] bg-[rgb(20,28,43,0.92)] shadow-[0_16px_40px_rgb(0,0,0,0.25)] flex flex-col items-center justify-center"
+        className="w-full h-full p-2 border border-white/[0.18] rounded-none bg-[rgb(20,28,43,0.92)] flex flex-col items-center justify-center"
       >
         {/* 权限调试面板（临时注释以测试布局，排查滚动条问题） */}
         {/*

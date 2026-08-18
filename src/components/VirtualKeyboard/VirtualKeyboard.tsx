@@ -23,8 +23,8 @@ export const VirtualKeyboard = ({ inputState }: VirtualKeyboardProps) => {
         <div className="flex justify-center gap-1.5" key={row}>
           {[...row].map((letter) => {
             const mappings = getKeyMappings(letter);
-            const isWaitingForSecondKey = inputState.phase === "waitingSecondKey";
-            const displayState = !isWaitingForSecondKey
+            const candidateMode = inputState.phase === "waitingSecondKey";
+            const displayState = !candidateMode
               ? "default"
               : inputState.candidateKeys.has(letter)
                 ? "candidate"
@@ -32,6 +32,7 @@ export const VirtualKeyboard = ({ inputState }: VirtualKeyboardProps) => {
 
             return (
               <Key
+                candidateMode={candidateMode}
                 displayState={displayState}
                 finals={mappings.finals}
                 initial={mappings.initial}

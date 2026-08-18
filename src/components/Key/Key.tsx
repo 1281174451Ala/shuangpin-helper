@@ -13,6 +13,8 @@ interface KeyProps {
   finals?: string[];
   /** 按键当前展示状态 */
   displayState: KeyDisplayState;
+  /** 是否处于等待第二键的候选态（隐藏全部声母并弱化标签） */
+  candidateMode?: boolean;
   /** 可选的点击回调，用于特殊按键（如退出键） */
   onClick?: () => void;
 }
@@ -22,7 +24,7 @@ interface KeyProps {
  * @param props 虚拟按键的显示状态
  * @returns 虚拟按键元素
  */
-export const Key = ({ label, initial, finals, displayState, onClick }: KeyProps) => {
+export const Key = ({ label, initial, finals, displayState, candidateMode = false, onClick }: KeyProps) => {
   const isCandidate = displayState === "candidate"; //是否为候选第二键
   const isDisabled = displayState === "disabled"; //是否为不可用键
   const isExit = displayState === "exit"; //是否为退出键
@@ -42,26 +44,32 @@ export const Key = ({ label, initial, finals, displayState, onClick }: KeyProps)
       onMouseDown={onClick ? handleMouseDown : undefined}
       style={{ width: 'var(--key-size)', height: 'var(--key-size)', fontSize: 'var(--key-size)' }}
       className={`
-        flex flex-col p-[0.075em] border rounded-[0.1em] text-inherit
+        flex flex-col p-[0.075em] border rounded-[0.1em] text-inherit transition-colors duration-200
         ${isExit
           ? "border-red-500 bg-red-700 cursor-pointer"
           : isCandidate
-            ? "border-[#f6c85f] bg-[#7a5b18] cursor-default"
-            : "border-[#52627f] bg-[#27344c] cursor-default disabled:opacity-28"
+            ? "border-[#f6c85f] bg-[#2b2417] cursor-default"
+            : "border-[#475569] bg-[#1e293b] cursor-default disabled:opacity-28"
         }
       `}
       disabled={isDisabled && !isExit}
       type="button"
     >
       <div className="flex justify-between items-start mb-[0.05em]">
-        <span className="text-[0.1875em] font-semibold">{label.toUpperCase()}</span>
-        {/* 候选时不显示声母 */}
-        {!isCandidate && initial && <small className="text-[#f2858c] text-[0.1625em]">{initial}</small>}
+        <span className={`text-[0.1875em] font-semibold ${candidateMode && !isExit ? (isCandidate ? "opacity-60" : "opacity-35") : ""}`}>{label.toUpperCase()}</span>
+        {/* 候选态时隐藏全部声母，避免干扰查找韵母 */}
+        {!candidateMode && initial && <small className="text-[#f2858c] text-[0.1625em]">{initial}</small>}
       </div>
       {finals && finals.length > 0 && (
         <div className="flex flex-col items-center gap-[0.05em] w-full">
           {finals.map((final, index) => (
-            <small key={index} className={`text-[#93bfff] ${isCandidate ? 'text-[0.15em]' : 'text-[0.1375em]'}  leading-normal`}>
+            <small
+              key={index}
+              className={`leading-normal ${isCandidate
+                ? `text-[#fde68a] font-bold ${finals.length > 1 ? "text-[0.175em]" : "text-[0.2em]"}`
+                : "text-[#93bfff] text-[0.1375em]"
+              }`}
+            >
               {final}
             </small>
           ))}
