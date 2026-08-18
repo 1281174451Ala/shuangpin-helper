@@ -118,7 +118,9 @@ export const App = () => {
       // 1. 订阅按键事件最先建立且独立容错：即使后续状态查询失败，Rust 按键也不会丢失
       try {
         const unlistenKeys = await listen<RustKeyEvent>("key-event", (event) => {
-          console.log("[来源:Rust 全局监听] key-event:", JSON.stringify(event.payload));
+          if (import.meta.env.DEV) {
+            console.log("[来源:Rust 全局监听] key-event:", JSON.stringify(event.payload));
+          }
           const inputEvent = rustEventToInputEvent(event.payload);
           if (inputEvent) {
             setInputState((currentState) => transition(currentState, inputEvent));
@@ -198,7 +200,9 @@ export const App = () => {
 
     const handleKeyDown = (event: KeyboardEvent) => {
       const inputEvent = normalizeKeyboardEvent(event);
-      console.log("[来源:浏览器 keydown]", event.key, inputEvent);
+      if (import.meta.env.DEV) {
+        console.log("[来源:浏览器 keydown]", event.key, inputEvent);
+      }
       if (!inputEvent) {
         return;
       }
