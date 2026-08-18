@@ -84,6 +84,8 @@ export const App = () => {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [isListening, setIsListening] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
+  // 用户是否已手动切换过监听状态：初始化同步到的过期结果不得覆盖用户操作
+  const userToggledListeningRef = useRef(false);
 
   // 根据卡片实际内容区（已扣除 padding）动态计算按键大小，使键盘始终与窗口等比匹配
   useEffect(() => {
@@ -107,12 +109,49 @@ export const App = () => {
     return () => observer.disconnect();
   }, []);
 
-  // 初始化：查询权限、订阅 Rust 全局按键事件（不自动启动监听，避免一打开 App 就注册系统钩子）
+  // 初始化：订阅 Rust 事件、查询权限、同步后端监听状态（不自动启动监听，避免一打开 App 就注册系统钩子）
   useEffect(() => {
     let disposed = false;
-    let unlisten: (() => void) | undefined;
+    const unlisteners: Array<() => void> = [];
 
     const setup = async () => {
+      // 1. 订阅按键事件最先建立且独立容错：即使后续状态查询失败，Rust 按键也不会丢失
+      try {
+        const unlistenKeys = await listen<RustKeyEvent>("key-event", (event) => {
+          console.log("[来源:Rust 全局监听] key-event:", JSON.stringify(event.payload));
+          const inputEvent = rustEventToInputEvent(event.payload);
+          if (inputEvent) {
+            setInputState((currentState) => transition(currentState, inputEvent));
+          }
+        });
+
+        // StrictMode 下 effect 会执行两次：若第一次的订阅在卸载后才建立，立即取消，避免重复订阅
+        if (disposed) {
+          unlistenKeys();
+        } else {
+          unlisteners.push(unlistenKeys);
+        }
+      } catch (error) {
+        console.warn("订阅 Rust key-event 失败", error);
+      }
+      if (disposed) return;
+
+      // 2. 订阅监听状态推送：后端监听线程异常退出时回退到窗口内监听，保持双向状态一致
+      try {
+        const unlistenStatus = await listen<boolean>("listener-status", (event) => {
+          setIsListening(Boolean(event.payload));
+        });
+        if (disposed) {
+          unlistenStatus();
+        } else {
+          unlisteners.push(unlistenStatus);
+        }
+      } catch (error) {
+        console.warn("订阅 Rust listener-status 失败", error);
+      }
+      if (disposed) return;
+
+      // 3. 查询权限（失败不影响事件订阅）
       try {
         const permission = await invoke<boolean>("get_accessibility_permission");
         setHasPermission(permission);
@@ -123,29 +162,22 @@ export const App = () => {
           const granted = await invoke<boolean>("get_accessibility_permission");
           setHasPermission(granted);
         }
+      } catch (error) {
+        console.warn("查询辅助功能权限失败", error);
+      }
+      if (disposed) return;
 
-        // 同步后端实际监听状态：Rust 在 setup 中可能已自动启动全局监听，
-        // 前端需据此设置 isListening，否则 window keydown fallback 会与
-        // 全局监听重复触发，导致候选键高亮一闪即逝（BUG-001）
+      // 4. 同步后端实际监听状态：Rust 在 setup 中可能已自动启动全局监听，
+      // 前端需据此设置 isListening，否则 window keydown fallback 会与
+      // 全局监听重复触发，导致候选键高亮一闪即逝（BUG-001）。
+      // 若用户已手动切换过监听，则丢弃该结果，避免过期的 false 覆盖用户操作（竞态）。
+      try {
         const listening = await invoke<boolean>("get_listener_status");
-        setIsListening(listening);
-
-        const sub = await listen<RustKeyEvent>("key-event", (event) => {
-          console.log("[来源:Rust 全局监听] key-event:", JSON.stringify(event.payload));
-          const inputEvent = rustEventToInputEvent(event.payload);
-          if (inputEvent) {
-            setInputState((currentState) => transition(currentState, inputEvent));
-          }
-        });
-
-        // StrictMode 下 effect 会执行两次：若第一次的订阅在卸载后才建立，立即取消，避免重复订阅
-        if (disposed) {
-          sub();
-        } else {
-          unlisten = sub;
+        if (!disposed && !userToggledListeningRef.current) {
+          setIsListening(listening);
         }
       } catch (error) {
-        console.warn("Tauri 后端未连接，使用浏览器键盘事件作为 fallback", error);
+        console.warn("同步后端监听状态失败", error);
       }
     };
 
@@ -153,7 +185,7 @@ export const App = () => {
 
     return () => {
       disposed = true;
-      unlisten?.();
+      unlisteners.forEach((unlisten) => unlisten());
     };
   }, []);
 
@@ -189,6 +221,8 @@ export const App = () => {
 
   const handleStartListening = async () => {
     try {
+      // 标记用户已手动切换：初始化同步若尚未完成，不得用过期结果覆盖此次操作
+      userToggledListeningRef.current = true;
       const started = await invoke<boolean>("start_key_listener");
       setIsListening(started);
     } catch (error) {

@@ -1,6 +1,33 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
+
+/** Tauri mock 的共享状态（vi.hoisted 保证在 vi.mock 工厂之前初始化）。 */
+const mocks = vi.hoisted(() => ({
+  /** get_listener_status 的返回值，模拟后端监听是否已启动。 */
+  listenerStatus: false,
+  /** 按事件名捕获的 listen 回调，用于模拟 Rust 主动推送。 */
+  handlers: {} as Record<string, (event: { payload: unknown }) => void>,
+}));
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: (cmd: string) => {
+    if (cmd === "get_accessibility_permission") return Promise.resolve(true);
+    if (cmd === "get_listener_status") return Promise.resolve(mocks.listenerStatus);
+    return Promise.resolve(true);
+  },
+}));
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: (name: string, handler: (event: { payload: unknown }) => void) => {
+    mocks.handlers[name] = handler;
+    return Promise.resolve(() => {});
+  },
+}));
+
+beforeEach(() => {
+  mocks.listenerStatus = false;
+});
 
 describe("App", () => {
   it("renders the shuangpin learning keyboard", () => {
@@ -44,5 +71,40 @@ describe("App", () => {
     fireEvent.keyDown(window, { key: "d" });
     fireEvent.keyDown(window, { key: "Enter" });
     expect(screen.getByRole("button", { name: /^H/i })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("ignores in-window keys when the backend global listener is already running (BUG-001 regression)", async () => {
+    mocks.listenerStatus = true;
+    render(<App />);
+
+    // 等待初始化同步完成，isListening 应已置为 true
+    await waitFor(() => {
+      expect(mocks.handlers["key-event"]).toBeDefined();
+      expect(mocks.handlers["listener-status"]).toBeDefined();
+    });
+    await act(async () => {});
+
+    // 全局监听运行中：窗口内按键不得触发候选高亮（否则会与 Rust 事件重复触发）
+    fireEvent.keyDown(window, { key: "d" });
+    expect(screen.getByRole("button", { name: /^H/i })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: /^B/i })).toBeEnabled();
+  });
+
+  it("falls back to in-window keys after the backend listener stops", async () => {
+    mocks.listenerStatus = true;
+    render(<App />);
+
+    await waitFor(() => {
+      expect(mocks.handlers["listener-status"]).toBeDefined();
+    });
+    await act(async () => {});
+
+    // 后端监听线程退出并推送 listener-status=false，前端应回退到窗口内监听
+    await act(async () => {
+      mocks.handlers["listener-status"]({ payload: false });
+    });
+
+    fireEvent.keyDown(window, { key: "d" });
+    expect(screen.getByRole("button", { name: /^H/i })).toHaveAttribute("aria-pressed", "true");
   });
 });

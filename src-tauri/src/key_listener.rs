@@ -23,6 +23,9 @@ use tauri::{AppHandle, Emitter};
 /// 前端监听该事件名接收按键协议事件。
 pub const KEY_EVENT_NAME: &str = "key-event";
 
+/// 前端监听该事件名感知全局监听启停状态（如监听线程异常退出时回退到窗口内监听）。
+pub const LISTENER_STATUS_EVENT_NAME: &str = "listener-status";
+
 /// 转发给前端的原生事件协议（见 mvp-implementation-design.md §3.2）。
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -80,9 +83,13 @@ pub fn start_listening(app: AppHandle) -> bool {
     #[cfg(target_os = "macos")]
     rdev::set_is_main_thread(false);
     let mut normalizer = Normalizer::new();
+    // 克隆一份供监听退出后推送状态：app 本体会被 move 进 rdev::listen 的闭包
+    let status_emitter = app.clone();
     let result = rdev::listen(move |event| forward_event(event, &mut normalizer, &app));
-    // 监听退出（初始化失败或异常），清空槽位以便之后可重新启动。
+    // 监听退出（初始化失败或异常），清空槽位以便之后可重新启动，
+    // 并通知前端监听已停止，使其回退到窗口内按键监听，避免双向状态静默分歧。
     *listener_slot().lock().unwrap() = None;
+    let _ = status_emitter.emit(LISTENER_STATUS_EVENT_NAME, false);
     if let Err(err) = result {
       eprintln!("global keyboard listener failed: {err:?}");
     }
