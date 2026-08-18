@@ -34,7 +34,7 @@ describe("createStateMachine", () => {
     expect(transition(pendingState, { type: "letter", key: "q" })).toEqual({ phase: "idle" });
   });
 
-  it.each(["escape", "enter", "reset"] as const)(
+  it.each(["escape", "enter", "space", "reset"] as const)(
     "returns to idle when %s clears a pending first key",
     (type) => {
       const transition = createStateMachine(new Map());
@@ -47,14 +47,14 @@ describe("createStateMachine", () => {
     },
   );
 
-  it("keeps a pending first key when space is pressed", () => {
+  it("clears a pending first key when space is pressed", () => {
     const transition = createStateMachine(new Map());
     const pendingState: InputState = {
       phase: "waitingSecondKey",
       candidateKeys: new Set(["e", "h"]),
     };
 
-    expect(transition(pendingState, { type: "space" })).toBe(pendingState);
+    expect(transition(pendingState, { type: "space" })).toEqual({ phase: "idle" });
   });
 
   it.each(["backspace", "escape", "enter", "reset"] as const)(

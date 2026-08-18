@@ -32,13 +32,16 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: /^B/i })).toBeEnabled();
   });
 
-  it("keeps candidates for space and clears them for Enter", () => {
+  it("clears candidates for space and Enter", () => {
     render(<App />);
 
     fireEvent.keyDown(window, { key: "d" });
-    fireEvent.keyDown(window, { key: " " });
     expect(screen.getByRole("button", { name: /^H/i })).toHaveAttribute("aria-pressed", "true");
 
+    fireEvent.keyDown(window, { key: " " });
+    expect(screen.getByRole("button", { name: /^H/i })).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.keyDown(window, { key: "d" });
     fireEvent.keyDown(window, { key: "Enter" });
     expect(screen.getByRole("button", { name: /^H/i })).toHaveAttribute("aria-pressed", "false");
   });
