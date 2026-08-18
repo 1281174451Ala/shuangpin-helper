@@ -2,30 +2,32 @@
 
 本文件记录尚未修复的已知问题，供后续排查与修复参考。
 
-## BUG-001：窗口内按键监听疑似重复触发，高亮一闪即逝
+## BUG-001：窗口内按键监听重复触发，高亮一闪即逝（已修复）
 
 ### 现象
 
-在未启动全局监听（`isListening` 为 false）时，于应用窗口内按键，候选键的高亮样式仅出现一瞬间便回到默认状态，无法稳定停留在"等待第二键"状态。
+启动全局监听时，于应用窗口内按键，候选键的高亮样式仅出现一瞬间便回到默认状态，无法稳定停留在"等待第二键"状态。
 
-### 怀疑原因
+### 根本原因
 
-`src/App.tsx` 中存在两个独立的按键处理路径：
+Rust 后端在 `src-tauri/src/lib.rs` 的 `setup` 阶段自动调用 `key_listener::start_listening`（见 ADR 023），即应用启动时若已获得辅助功能权限，全局监听便已运行。
 
-1. 第一个 `useEffect` 订阅 Tauri 后端的 `key-event` 事件（Rust 全局监听），回调中调用 `setInputState((s) => transition(s, inputEvent))`。
-2. 第二个 `useEffect` 在 `!isListening` 时注册 `window.addEventListener("keydown")`，回调中同样调用 `setInputState((s) => transition(s, inputEvent))`。
+但前端 `src/App.tsx` 的 `isListening` 状态初始值为 `false`，且仅当用户手动点击"启动全局监听"按钮时才设为 `true`。这导致：
 
-两条路径可能对同一次按键各触发一次状态转移：第一次将状态推进到"等待第二键"（高亮候选），第二次立即将其重置或推进，导致高亮一闪即逝。需要进一步确认两条路径是否在同一条件下同时生效，以及 `transition` 在连续两次相同输入下的行为。
+1. Rust 全局监听已启动，按键通过 `key-event` 事件触发第一次状态转移（idle → waitingSecondKey，高亮候选键出现）。
+2. 前端 `isListening` 仍为 `false`，第二个 `useEffect` 注册了 `window.addEventListener("keydown")`，同一按键触发第二次状态转移（waitingSecondKey → idle，高亮消失）。
+
+状态机 `transition` 在 `waitingSecondKey` 状态下收到任意 `letter` 事件会直接返回 `{ phase: "idle" }`，因此第二次触发使高亮一闪即逝。
+
+### 修复方案
+
+在 `src/App.tsx` 初始化 `useEffect` 的 `setup` 函数中，权限检查后调用 `invoke<boolean>("get_listener_status")` 查询后端实际监听状态，并据此设置 `isListening`。当 Rust 已自动启动监听时，前端 `isListening` 同步为 `true`，第二个 `useEffect` 不再注册 `window.addEventListener("keydown")`，消除重复触发。
 
 ### 复现条件
 
-- 未授予辅助功能权限或未点击"开始监听"，`isListening` 为 false。
+- 启动全局监听。
 - 在应用窗口内按下字母键。
-
-### 临时规避
-
-暂无。优先使用全局监听模式（授予辅助功能权限并启动监听）。
 
 ### 状态
 
-待修复。
+已修复。提交：`fix: sync isListening with backend on init to prevent double key trigger`。

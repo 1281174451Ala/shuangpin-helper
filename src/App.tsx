@@ -124,6 +124,12 @@ export const App = () => {
           setHasPermission(granted);
         }
 
+        // 同步后端实际监听状态：Rust 在 setup 中可能已自动启动全局监听，
+        // 前端需据此设置 isListening，否则 window keydown fallback 会与
+        // 全局监听重复触发，导致候选键高亮一闪即逝（BUG-001）
+        const listening = await invoke<boolean>("get_listener_status");
+        setIsListening(listening);
+
         const sub = await listen<RustKeyEvent>("key-event", (event) => {
           console.log("[来源:Rust 全局监听] key-event:", JSON.stringify(event.payload));
           const inputEvent = rustEventToInputEvent(event.payload);
