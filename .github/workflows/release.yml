@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    name: Build & Release
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node.js
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: "npm"
+
+      # Rust
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          cache-on-failure: true
+
+      # 前端依赖
+      - run: npm ci
+
+      # 双保险：Release 工作流也跑一遍测试
+      - run: npm test
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      # 构建并发布
+      - name: Build and Release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v__VERSION__
+          releaseName: "双拼辅助键盘 v__VERSION__"
+          releaseBody: |
+            ## 更新内容
+
+            请查看该版本的提交记录以了解详细变更。
+          releaseDraft: false
+          prerelease: false

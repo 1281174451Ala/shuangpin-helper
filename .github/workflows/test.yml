@@ -1,0 +1,43 @@
+name: Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Test & Build
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node.js
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: "npm"
+
+      # Rust
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          cache-on-failure: true
+
+      # 前端依赖
+      - run: npm ci
+
+      # 前端测试
+      - run: npm test
+
+      # 前端生产构建检查
+      - run: npm run build
+
+      # Rust 测试
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
