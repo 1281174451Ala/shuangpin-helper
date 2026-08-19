@@ -271,6 +271,8 @@ export const App = () => {
         setInputState({ phase: "idle" });
         setIsListening(false);
         void invoke("hide_window");
+      }else {
+        reportActivity(); //取消淡化
       }
     };
 
@@ -326,10 +328,15 @@ export const App = () => {
     }
   };
 
+  /**
+   * 报告窗口拖动活动，并启动原生窗口拖动。
+   * @param e 鼠标按下事件
+   */
   const handleMouseDown = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
     // 点击到按钮、输入框等交互元素时不触发拖拽
     if (target.closest("input, select, textarea")) return;
+    reportActivity();
     const win = getCurrentWindow();
     win.setFocus();
     win.startDragging();

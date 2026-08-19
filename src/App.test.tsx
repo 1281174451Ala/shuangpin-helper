@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
 /** Tauri mock 的共享状态（vi.hoisted 保证在 vi.mock 工厂之前初始化）。 */
@@ -45,6 +45,10 @@ beforeEach(() => {
   mocks.focusHandler = undefined;
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 /** 渲染应用并等待异步初始化完成，避免断言结束后仍有状态更新。 */
 const renderApp = async () => {
   render(<App />);
@@ -71,6 +75,23 @@ describe("App", () => {
     });
 
     expect(mocks.invokedCommands).toContain("start_key_listener");
+  });
+
+  it("restores full opacity when dragging an idle window", async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {});
+
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
+    expect(document.querySelector("main")).toHaveStyle({ opacity: "0.3" });
+
+    await act(async () => {
+      fireEvent.mouseDown(document.querySelector("main")!);
+    });
+
+    expect(document.querySelector("main")).toHaveStyle({ opacity: "1" });
   });
 
   it("resets candidate keys after the native window-hidden event", async () => {
