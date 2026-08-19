@@ -80,6 +80,8 @@ const transition = createStateMachine(xiaoheCandidateIndex);
 const IDLE_DELAY_MS = 3000;
 /** 空闲时的透明度。后续设置页可自定义。 */
 const IDLE_OPACITY = 0.3;
+/** Rust 在任何窗口隐藏入口执行清理后发出的通知。 */
+const WINDOW_HIDDEN_EVENT = "window-hidden";
 
 /**
  * 渲染双拼学习悬浮窗口的最小界面。
@@ -87,11 +89,11 @@ const IDLE_OPACITY = 0.3;
  */
 export const App = () => {
   const [inputState, setInputState] = useState<InputState>({ phase: "idle" });
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [isListening, setIsListening] = useState(false);
-  const cardRef = useRef<HTMLDivElement>(null);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null); //辅助功能权限状态
+  const [isListening, setIsListening] = useState(false); //全局监听是否正在转发事件
+  const cardRef = useRef<HTMLDivElement>(null); //键盘容器引用
   // 用户是否已手动切换过监听状态：初始化同步到的过期结果不得覆盖用户操作
-  const userToggledListeningRef = useRef(false);
+  const userToggledListeningRef = useRef(false); //用户是否手动切换过监听
   const { isIdle, reportActivity } = useIdleFade({ delay: IDLE_DELAY_MS });
 
   // 根据卡片实际内容区（已扣除 padding）动态计算按键大小，使键盘始终与窗口等比匹配
@@ -116,7 +118,7 @@ export const App = () => {
     return () => observer.disconnect();
   }, []);
 
-  // 初始化：订阅 Rust 事件、查询权限、同步后端监听状态（不自动启动监听，避免一打开 App 就注册系统钩子）
+  // 初始化：订阅 Rust 事件、查询权限并同步后端监听状态
   useEffect(() => {
     let disposed = false;
     const unlisteners: Array<() => void> = [];
@@ -161,7 +163,23 @@ export const App = () => {
       }
       if (disposed) return;
 
-      // 3. 查询权限（失败不影响事件订阅）
+      // 3. 接收原生隐藏流程通知，确保所有入口均清空候选状态
+      try {
+        const unlistenWindowHidden = await listen(WINDOW_HIDDEN_EVENT, () => {
+          setInputState({ phase: "idle" });
+          setIsListening(false);
+        });
+        if (disposed) {
+          unlistenWindowHidden();
+        } else {
+          unlisteners.push(unlistenWindowHidden);
+        }
+      } catch (error) {
+        console.warn("订阅窗口隐藏事件失败", error);
+      }
+      if (disposed) return;
+
+      // 4. 查询权限（失败不影响事件订阅）
       try {
         const permission = await invoke<boolean>("get_accessibility_permission");
         setHasPermission(permission);
@@ -171,13 +189,17 @@ export const App = () => {
           await invoke("request_accessibility_permission");
           const granted = await invoke<boolean>("get_accessibility_permission");
           setHasPermission(granted);
+          if (granted) {
+            const started = await invoke<boolean>("start_key_listener");
+            setIsListening(started);
+          }
         }
       } catch (error) {
         console.warn("查询辅助功能权限失败", error);
       }
       if (disposed) return;
 
-      // 4. 同步后端实际监听状态：Rust 在 setup 中可能已自动启动全局监听，
+      // 5. 同步后端实际监听状态：Rust 在 setup 中可能已自动启动全局监听，
       // 前端需据此设置 isListening，否则 window keydown fallback 会与
       // 全局监听重复触发，导致候选键高亮一闪即逝（BUG-001）。
       // 若用户已手动切换过监听，则丢弃该结果，避免过期的 false 覆盖用户操作（竞态）。
@@ -197,6 +219,63 @@ export const App = () => {
       disposed = true;
       unlisteners.forEach((unlisten) => unlisten());
     };
+  }, []);
+
+  // 窗口重新获得焦点时重新检测权限并恢复全局监听
+  useEffect(() => {
+    let disposed = false;
+    let unlistenFocus: (() => void) | undefined;
+
+    /** 检查辅助功能权限，并在已授权时恢复全局键盘事件转发。 */
+    const resumeWhenPermitted = async () => {
+      try {
+        const granted = await invoke<boolean>("get_accessibility_permission");
+        if (disposed) return;
+        setHasPermission(granted);
+        if (!granted) {
+          setIsListening(false);
+          return;
+        }
+        const started = await invoke<boolean>("start_key_listener");
+        if (!disposed) {
+          setIsListening(started);
+        }
+      } catch (error) {
+        console.warn("恢复全局监听失败", error);
+      }
+    };
+
+    getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+      if (focused) {
+        void resumeWhenPermitted();
+      }
+    }).then((unlisten) => {
+      if (disposed) {
+        unlisten();
+      } else {
+        unlistenFocus = unlisten;
+      }
+    }).catch((error) => console.warn("订阅窗口焦点变化失败", error));
+
+    return () => {
+      disposed = true;
+      unlistenFocus?.();
+    };
+  }, []);
+
+  // 响应 Command+H 等 macOS 应用隐藏动作，进入与其他隐藏入口相同的清理流程
+  useEffect(() => {
+    /** 将 macOS 应用隐藏事件统一转为原生窗口隐藏流程。 */
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        setInputState({ phase: "idle" });
+        setIsListening(false);
+        void invoke("hide_window");
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, []);
 
   // 监听应用内键盘输入，仅作为全局监听未启动时的 fallback
@@ -230,6 +309,10 @@ export const App = () => {
   const handleRefreshPermission = async () => {
     const granted = await invoke<boolean>("get_accessibility_permission");
     setHasPermission(granted);
+    if (granted) {
+      const started = await invoke<boolean>("start_key_listener");
+      setIsListening(started);
+    }
   };
 
   const handleStartListening = async () => {
