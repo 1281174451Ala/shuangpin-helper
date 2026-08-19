@@ -9,6 +9,7 @@ import {
   type InputEvent,
   type InputState,
 } from "./engine/stateMachine";
+import { useIdleFade } from "./hooks/useIdleFade";
 
 /**
  * 将应用内键盘事件转换为双拼状态机事件。
@@ -75,6 +76,11 @@ const rustEventToInputEvent = (event: RustKeyEvent): InputEvent | null => {
 
 const transition = createStateMachine(xiaoheCandidateIndex);
 
+/** 空闲多久后自动淡化（毫秒）。后续设置页可自定义。 */
+const IDLE_DELAY_MS = 3000;
+/** 空闲时的透明度。后续设置页可自定义。 */
+const IDLE_OPACITY = 0.3;
+
 /**
  * 渲染双拼学习悬浮窗口的最小界面。
  * @returns 应用根元素
@@ -86,6 +92,7 @@ export const App = () => {
   const cardRef = useRef<HTMLDivElement>(null);
   // 用户是否已手动切换过监听状态：初始化同步到的过期结果不得覆盖用户操作
   const userToggledListeningRef = useRef(false);
+  const { isIdle, reportActivity } = useIdleFade({ delay: IDLE_DELAY_MS });
 
   // 根据卡片实际内容区（已扣除 padding）动态计算按键大小，使键盘始终与窗口等比匹配
   useEffect(() => {
@@ -118,6 +125,7 @@ export const App = () => {
       // 1. 订阅按键事件最先建立且独立容错：即使后续状态查询失败，Rust 按键也不会丢失
       try {
         const unlistenKeys = await listen<RustKeyEvent>("key-event", (event) => {
+          reportActivity();
           if (import.meta.env.DEV) {
             console.log("[来源:Rust 全局监听] key-event:", JSON.stringify(event.payload));
           }
@@ -199,6 +207,7 @@ export const App = () => {
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      reportActivity();
       const inputEvent = normalizeKeyboardEvent(event);
       if (import.meta.env.DEV) {
         console.log("[来源:浏览器 keydown]", event.key, inputEvent);
@@ -247,7 +256,11 @@ export const App = () => {
     <main
       onMouseDown={handleMouseDown}
       className="flex flex-col items-center justify-center w-screen h-screen p-2 select-none"
-      style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.4))" }}
+      style={{
+        filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.4))",
+        opacity: isIdle ? IDLE_OPACITY : 1,
+        transition: `opacity ${isIdle ? "0.8s" : "0.15s"} ease`,
+      }}
     >
       <div
         ref={cardRef}
