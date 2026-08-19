@@ -20,3 +20,5 @@ macos-accessibility-client = "0.0.2"
 # （Hush 项目实测 c14f2dc 通过，PR #147 的完整修复包含在此 commit 中）。
 rdev = { git = "https://github.com/Narsil/rdev", rev = "c14f2dc5c8100a96c5d7e3013de59d6aa0b9eae2" }
 serde = { version = "1", features = ["derive"] }
+# 单实例
+tauri-plugin-single-instance = "2"

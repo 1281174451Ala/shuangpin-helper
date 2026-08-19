@@ -20,6 +20,14 @@ const MENU_EXIT: &str = "exit";
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
+    .plugin(tauri_plugin_single_instance::init(|app, _argv, _vwd| {
+      // 启动时若已有实例，显示并聚焦到该实例 （单实例模式）
+      if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ =window.unminimize();
+        let _ = window.set_focus();
+      }
+    }))
     .setup(|app| {
       // 构建中文菜单栏
       let menu = MenuBuilder::new(app)
