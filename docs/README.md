@@ -7,7 +7,8 @@
 1. [术语表](glossary.md)：统一双拼、状态机和原生集成相关概念。
 2. [MVP 实施设计](mvp-implementation-design.md)：按模块说明功能边界、数据流和实现顺序。
 3. [测试与验收清单](test-and-acceptance-checklist.md)：区分自动化测试与 macOS 手动验收。
-4. [架构决策记录](adr/)：说明每项已确认决策的背景、选择和影响。
+4. [版本发布流程](release-process.md)：从版本号更新到 CI 自动发布的完整操作步骤。
+5. [架构决策记录](adr/)：说明每项已确认决策的背景、选择和影响。
 
 ## 已接受的架构决策
 
