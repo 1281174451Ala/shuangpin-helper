@@ -1,10 +1,15 @@
 mod key_listener;
+mod window_position;
 
 use std::process::Command;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::TrayIconBuilder,
-    AppHandle, Emitter, Manager,
+    AppHandle, Emitter, Manager, PhysicalPosition,
+};
+use window_position::{
+    is_position_visible, MonitorWorkArea, SavedWindowPosition, WindowPositionStore, WindowSize,
+    WINDOW_POSITION_FILE_NAME,
 };
 
 /// 托盘图标资源（16x16 PNG）。
@@ -24,6 +29,9 @@ pub fn run() {
             show_main_window(app);
         }))
         .setup(|app| {
+            let position_path = app.path().app_config_dir()?.join(WINDOW_POSITION_FILE_NAME);
+            app.manage(WindowPositionStore::new(position_path));
+
             // 构建中文菜单栏
             let menu = MenuBuilder::new(app)
                 .item(&MenuItemBuilder::with_id(MENU_TOGGLE_WINDOW, "显示/隐藏窗口").build(app)?)
@@ -86,12 +94,22 @@ pub fn run() {
                 // 原生阴影仍为矩形，会在圆角外露出灰色直角线。
                 // 改由前端 filter: drop-shadow 提供跟随圆角的阴影。
                 let _ = window.set_shadow(false);
+                restore_main_window_position(&window, &app.state::<WindowPositionStore>());
                 let app_handle = app.handle().clone();
-                window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                window.on_window_event(move |event| match event {
+                    tauri::WindowEvent::Moved(position) => {
+                        app_handle
+                            .state::<WindowPositionStore>()
+                            .record(SavedWindowPosition {
+                                x: position.x,
+                                y: position.y,
+                            });
+                    }
+                    tauri::WindowEvent::CloseRequested { api, .. } => {
                         api.prevent_close();
                         hide_main_window(&app_handle);
                     }
+                    _ => {}
                 });
             }
 
@@ -111,12 +129,51 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building ShuangPin Helper");
 
-    app.run(|app, event| {
+    app.run(|app, event| match event {
         #[cfg(target_os = "macos")]
-        if let tauri::RunEvent::Reopen { .. } = event {
-            show_main_window(app);
-        }
+        tauri::RunEvent::Reopen { .. } => show_main_window(app),
+        tauri::RunEvent::Exit => app.state::<WindowPositionStore>().flush(),
+        _ => {}
     });
+}
+
+/// 恢复与当前任一显示器工作区相交的上次窗口位置。
+fn restore_main_window_position(
+    window: &tauri::WebviewWindow,
+    position_store: &WindowPositionStore,
+) {
+    let Some(position) = position_store.load() else {
+        return;
+    };
+    let Ok(window_size) = window.outer_size() else {
+        return;
+    };
+    let Ok(monitors) = window.available_monitors() else {
+        return;
+    };
+    let work_areas = monitors
+        .iter()
+        .map(|monitor| {
+            let work_area = monitor.work_area();
+            MonitorWorkArea {
+                x: work_area.position.x,
+                y: work_area.position.y,
+                width: work_area.size.width,
+                height: work_area.size.height,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    if is_position_visible(
+        position,
+        WindowSize {
+            width: window_size.width,
+            height: window_size.height,
+        },
+        &work_areas,
+    ) {
+        let _ = window.set_position(PhysicalPosition::new(position.x, position.y));
+    }
 }
 
 /// 显示主窗口、恢复按键转发并让 macOS 将应用带到前台。
