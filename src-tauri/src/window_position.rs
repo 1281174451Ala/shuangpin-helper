@@ -162,8 +162,23 @@ mod tests {
     use super::*;
     use std::{
         fs, thread,
-        time::{Duration, SystemTime, UNIX_EPOCH},
+        time::{Duration, Instant, SystemTime, UNIX_EPOCH},
     };
+
+    /// 等待后台防抖任务写入位置；超时后返回最后一次读取结果。
+    fn wait_for_persisted_position(path: &Path) -> Option<SavedWindowPosition> {
+        let deadline = Instant::now() + Duration::from_secs(1);
+
+        loop {
+            if let Some(position) = read_position(path) {
+                return Some(position);
+            }
+            if Instant::now() >= deadline {
+                return None;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
 
     /// 创建本测试独占的临时持久化文件路径。
     fn temporary_position_path() -> std::path::PathBuf {
@@ -226,9 +241,8 @@ mod tests {
 
         store.record(first_position);
         store.record(last_position);
-        thread::sleep(Duration::from_millis(400));
 
-        assert_eq!(read_position(&path), Some(last_position));
+        assert_eq!(wait_for_persisted_position(&path), Some(last_position));
         let _ = fs::remove_file(path);
     }
 }
