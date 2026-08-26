@@ -20,6 +20,8 @@ const MENU_TOGGLE_WINDOW: &str = "toggle_window";
 const MENU_PERMISSION_CHECK: &str = "permission_check";
 const MENU_OPEN_SETTINGS: &str = "open_settings";
 const MENU_EXIT: &str = "exit";
+/// 原生窗口移动时通知前端继续保持活动状态的事件名。
+const WINDOW_MOVED_EVENT: &str = "window-moved";
 
 /// Starts the desktop shell and creates the floating application window.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -104,6 +106,7 @@ pub fn run() {
                                 x: position.x,
                                 y: position.y,
                             });
+                        let _ = app_handle.emit(WINDOW_MOVED_EVENT, ());
                     }
                     tauri::WindowEvent::CloseRequested { api, .. } => {
                         api.prevent_close();

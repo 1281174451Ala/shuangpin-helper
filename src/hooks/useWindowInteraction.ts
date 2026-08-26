@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+
+/** Rust 在原生窗口移动时发出的通知。 */
+const WINDOW_MOVED_EVENT = "window-moved";
 
 /** useWindowInteraction 的入参。 */
 interface UseWindowInteractionOptions {
@@ -60,6 +64,30 @@ export const useWindowInteraction = ({ reportActivity }: UseWindowInteractionOpt
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [reportActivity]);
+
+  // 监听原生窗口移动，在持续拖动期间保持界面处于活动状态
+  useEffect(() => {
+    let disposed = false;
+    let unlistenWindowMoved: (() => void) | undefined;
+
+    /** 原生窗口持续移动时重置空闲淡化计时。 */
+    const handleWindowMoved = () => {
+      reportActivity();
+    };
+
+    listen(WINDOW_MOVED_EVENT, handleWindowMoved).then((unlisten) => {
+      if (disposed) {
+        unlisten();
+      } else {
+        unlistenWindowMoved = unlisten;
+      }
+    }).catch((error) => console.warn("订阅窗口移动事件失败", error));
+
+    return () => {
+      disposed = true;
+      unlistenWindowMoved?.();
+    };
   }, [reportActivity]);
 
   /**
