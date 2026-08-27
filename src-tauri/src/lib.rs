@@ -3,7 +3,7 @@ mod window_position;
 
 use std::process::Command;
 use tauri::{
-    menu::{MenuBuilder, MenuItemBuilder},
+    menu::{MenuBuilder, MenuItem, MenuItemBuilder},
     tray::TrayIconBuilder,
     AppHandle, Emitter, Manager, PhysicalPosition,
 };
@@ -23,6 +23,12 @@ const MENU_EXIT: &str = "exit";
 /// 原生窗口移动时通知前端继续保持活动状态的事件名。
 const WINDOW_MOVED_EVENT: &str = "window-moved";
 
+/// 两处窗口显隐菜单项，需同步更新文案。
+struct WindowToggleMenuItems {
+    application_menu: MenuItem<tauri::Wry>,
+    tray_menu: MenuItem<tauri::Wry>,
+}
+
 /// Starts the desktop shell and creates the floating application window.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -35,8 +41,11 @@ pub fn run() {
             app.manage(WindowPositionStore::new(position_path));
 
             // 构建中文菜单栏
+            let application_toggle_item =
+                MenuItemBuilder::with_id(MENU_TOGGLE_WINDOW, window_toggle_text(false))
+                    .build(app)?;
             let menu = MenuBuilder::new(app)
-                .item(&MenuItemBuilder::with_id(MENU_TOGGLE_WINDOW, "显示/隐藏窗口").build(app)?)
+                .item(&application_toggle_item)
                 .item(
                     &MenuItemBuilder::with_id(MENU_PERMISSION_CHECK, "检查辅助功能权限")
                         .build(app)?,
@@ -48,8 +57,11 @@ pub fn run() {
             app.set_menu(menu)?;
 
             // 托盘菜单
+            let tray_toggle_item =
+                MenuItemBuilder::with_id(MENU_TOGGLE_WINDOW, window_toggle_text(false))
+                    .build(app)?;
             let tray_menu = MenuBuilder::new(app)
-                .item(&MenuItemBuilder::with_id(MENU_TOGGLE_WINDOW, "显示/隐藏窗口").build(app)?)
+                .item(&tray_toggle_item)
                 .item(
                     &MenuItemBuilder::with_id(MENU_PERMISSION_CHECK, "检查辅助功能权限")
                         .build(app)?,
@@ -65,12 +77,24 @@ pub fn run() {
                 .menu(&tray_menu)
                 .build(app)?;
 
+            app.manage(WindowToggleMenuItems {
+                application_menu: application_toggle_item,
+                tray_menu: tray_toggle_item,
+            });
+            sync_window_toggle_text(
+                &app.handle(),
+                app.get_webview_window("main")
+                    .and_then(|window| window.is_visible().ok())
+                    .unwrap_or(false),
+            );
+
             // 菜单事件处理
             app.on_menu_event(|app, event| match event.id.as_ref() {
                 MENU_TOGGLE_WINDOW => {
                     if let Some(window) = app.get_webview_window("main") {
                         let is_visible = window.is_visible().unwrap_or(false);
-                        if is_visible {
+                        let is_minimized = window.is_minimized().unwrap_or(false);
+                        if is_visible && !is_minimized {
                             hide_main_window(app);
                         } else {
                             show_main_window(app);
@@ -188,6 +212,7 @@ fn show_main_window(app: &AppHandle) {
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
+        sync_window_toggle_text(app, window.is_visible().unwrap_or(true));
     }
     key_listener::start_listening(app.clone());
 }
@@ -198,7 +223,25 @@ fn hide_main_window(app: &AppHandle) {
     let _ = app.emit("window-hidden", ());
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.hide();
+        sync_window_toggle_text(app, window.is_visible().unwrap_or(false));
     }
+}
+
+/// 根据窗口当前状态返回菜单项应表达的下一步操作。
+fn window_toggle_text(is_visible: bool) -> &'static str {
+    if is_visible {
+        "隐藏窗口"
+    } else {
+        "显示窗口"
+    }
+}
+
+/// 同步应用菜单与托盘菜单中的窗口显隐操作文案。
+fn sync_window_toggle_text(app: &AppHandle, is_visible: bool) {
+    let text = window_toggle_text(is_visible);
+    let menu_items = app.state::<WindowToggleMenuItems>();
+    let _ = menu_items.application_menu.set_text(text);
+    let _ = menu_items.tray_menu.set_text(text);
 }
 
 fn open_accessibility_settings_impl() {
@@ -253,4 +296,15 @@ fn hide_window(app: AppHandle) {
 #[tauri::command]
 fn exit_app(app: AppHandle) {
     app.exit(0);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::window_toggle_text;
+
+    #[test]
+    fn window_toggle_text_describes_the_next_action() {
+        assert_eq!(window_toggle_text(true), "隐藏窗口");
+        assert_eq!(window_toggle_text(false), "显示窗口");
+    }
 }
