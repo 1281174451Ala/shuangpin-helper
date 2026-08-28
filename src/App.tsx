@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { VirtualKeyboard } from "./components/VirtualKeyboard/VirtualKeyboard";
 import { useGlobalKeyListener } from "./hooks/useGlobalKeyListener";
 import { useIdleFade } from "./hooks/useIdleFade";
@@ -16,8 +17,14 @@ const IDLE_OPACITY = 0.3;
 export const App = () => {
   const { isIdle, reportActivity } = useIdleFade({ delay: IDLE_DELAY_MS });
   const { isListening } = useGlobalKeyListener();
-  const { inputState } = useKeyboardInput({ isListening, reportActivity });
+  const { inputState, resetInput } = useKeyboardInput({ isListening, reportActivity });
   const { cardRef, handleMouseDown } = useWindowInteraction({ reportActivity });
+
+  // 空闲时重置状态
+  useEffect(() => {
+    isIdle && resetInput();
+  }, [isIdle]);
+
 
   return (
     <main
