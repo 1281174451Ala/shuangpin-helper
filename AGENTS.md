@@ -38,3 +38,17 @@ Add focused unit tests for shuangpin mappings, valid initial/final combinations,
 ## Commit & Pull Request Guidelines
 
 There is no Git history yet, so use concise imperative commits such as `feat: add xiaohe mapping engine` or `fix: reset state after second key`. Keep commits scoped. Pull requests should describe the user-visible behavior, link the relevant requirement or issue, list tests run, and include screenshots or a short recording for keyboard/window UI changes. Flag any macOS permissions, accessibility, or startup-item changes explicitly.
+
+## Agent skills
+
+### Issue tracker
+
+本仓库使用 GitHub Issues 跟踪 issue 和 spec。见 `docs/agents/issue-tracker.md`。
+
+### Triage labels
+
+使用默认的五个分类标签。见 `docs/agents/triage-labels.md`。
+
+### Domain docs
+
+使用单上下文布局：根目录 `CONTEXT.md` 与 `docs/adr/`。见 `docs/agents/domain.md`。
