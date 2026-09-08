@@ -1,11 +1,13 @@
 mod key_listener;
+mod settings;
 mod window_position;
 
+use settings::{ApplicationSettings, ApplicationSettingsStore, SETTINGS_FILE_NAME};
 use std::process::Command;
 use tauri::{
     menu::{MenuBuilder, MenuItem, MenuItemBuilder},
     tray::TrayIconBuilder,
-    AppHandle, Emitter, Manager, PhysicalPosition,
+    AppHandle, Emitter, Manager, PhysicalPosition, WebviewUrl, WebviewWindowBuilder,
 };
 use window_position::{
     is_position_visible, MonitorWorkArea, SavedWindowPosition, WindowPositionStore, WindowSize,
@@ -17,16 +19,67 @@ const TRAY_ICON: &[u8] = include_bytes!("../icons/tray-icon.png");
 
 /// 菜单项事件 ID。
 const MENU_TOGGLE_WINDOW: &str = "toggle_window";
+const MENU_OPEN_APP_SETTINGS: &str = "open_app_settings";
 const MENU_PERMISSION_CHECK: &str = "permission_check";
-const MENU_OPEN_SETTINGS: &str = "open_settings";
+const MENU_OPEN_ACCESSIBILITY_SETTINGS: &str = "open_accessibility_settings";
 const MENU_EXIT: &str = "exit";
 /// 原生窗口移动时通知前端继续保持活动状态的事件名。
 const WINDOW_MOVED_EVENT: &str = "window-moved";
+/// 应用设置持久化成功后向全部窗口广播的事件名。
+const APPLICATION_SETTINGS_CHANGED_EVENT: &str = "application-settings-changed";
 
 /// 两处窗口显隐菜单项，需同步更新文案。
 struct WindowToggleMenuItems {
     application_menu: MenuItem<tauri::Wry>,
     tray_menu: MenuItem<tauri::Wry>,
+}
+
+/// 首次打开设置窗口时使用的固定窗口规格。
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct SettingsWindowSpec {
+    /// Tauri 窗口标签。
+    label: &'static str,
+    /// 设置视图入口 URL。
+    url: &'static str,
+    /// 原生标题栏文字。
+    title: &'static str,
+    /// 窗口内容宽度。
+    width: f64,
+    /// 窗口内容高度。
+    height: f64,
+    /// 创建时是否获得焦点。
+    focused: bool,
+    /// 是否允许用户调整大小。
+    resizable: bool,
+    /// 是否保持置顶。
+    always_on_top: bool,
+}
+
+/// 打开设置入口时应采取的原生窗口动作。
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum SettingsWindowAction {
+    /// 显示并聚焦已有设置窗口。
+    FocusExisting,
+    /// 按指定规格创建新设置窗口。
+    Create(SettingsWindowSpec),
+}
+
+/// 根据设置窗口是否存在决定复用或创建。
+fn settings_window_action(window_exists: bool) -> SettingsWindowAction {
+    if window_exists {
+        return SettingsWindowAction::FocusExisting;
+    }
+
+    SettingsWindowAction::Create(SettingsWindowSpec {
+        label: "settings",
+        url: "index.html?window=settings",
+        title: "双拼辅助键盘设置",
+        width: 420.0,
+        height: 280.0,
+        focused: true,
+        resizable: false,
+        always_on_top: false,
+    })
 }
 
 /// Starts the desktop shell and creates the floating application window.
@@ -39,6 +92,10 @@ pub fn run() {
         .setup(|app| {
             let position_path = app.path().app_config_dir()?.join(WINDOW_POSITION_FILE_NAME);
             app.manage(WindowPositionStore::new(position_path));
+            let settings_path = app.path().app_config_dir()?.join(SETTINGS_FILE_NAME);
+            let settings_store = ApplicationSettingsStore::new(settings_path);
+            let _settings = settings_store.load();
+            app.manage(settings_store);
 
             // 构建中文菜单栏
             let application_toggle_item =
@@ -46,11 +103,15 @@ pub fn run() {
                     .build(app)?;
             let menu = MenuBuilder::new(app)
                 .item(&application_toggle_item)
+                .item(&MenuItemBuilder::with_id(MENU_OPEN_APP_SETTINGS, "打开应用设置").build(app)?)
                 .item(
                     &MenuItemBuilder::with_id(MENU_PERMISSION_CHECK, "检查辅助功能权限")
                         .build(app)?,
                 )
-                .item(&MenuItemBuilder::with_id(MENU_OPEN_SETTINGS, "打开系统设置").build(app)?)
+                .item(
+                    &MenuItemBuilder::with_id(MENU_OPEN_ACCESSIBILITY_SETTINGS, "打开辅助功能设置")
+                        .build(app)?,
+                )
                 .separator()
                 .item(&MenuItemBuilder::with_id(MENU_EXIT, "退出").build(app)?)
                 .build()?;
@@ -62,6 +123,7 @@ pub fn run() {
                     .build(app)?;
             let tray_menu = MenuBuilder::new(app)
                 .item(&tray_toggle_item)
+                .item(&MenuItemBuilder::with_id(MENU_OPEN_APP_SETTINGS, "打开应用设置").build(app)?)
                 .item(
                     &MenuItemBuilder::with_id(MENU_PERMISSION_CHECK, "检查辅助功能权限")
                         .build(app)?,
@@ -105,7 +167,10 @@ pub fn run() {
                     let granted = key_listener::has_accessibility_permission();
                     let _ = app.emit("permission-check-result", granted);
                 }
-                MENU_OPEN_SETTINGS => {
+                MENU_OPEN_APP_SETTINGS => {
+                    open_settings_window(app);
+                }
+                MENU_OPEN_ACCESSIBILITY_SETTINGS => {
                     open_accessibility_settings_impl();
                 }
                 MENU_EXIT => {
@@ -150,6 +215,8 @@ pub fn run() {
             open_accessibility_settings,
             start_key_listener,
             get_listener_status,
+            get_application_settings,
+            save_application_settings,
             hide_window,
             exit_app
         ])
@@ -162,6 +229,28 @@ pub fn run() {
         tauri::RunEvent::Exit => app.state::<WindowPositionStore>().flush(),
         _ => {}
     });
+}
+
+/// 打开可编辑的设置窗口；已存在时只将其置于前台。
+fn open_settings_window(app: &AppHandle) {
+    let existing_window = app.get_webview_window("settings");
+    match settings_window_action(existing_window.is_some()) {
+        SettingsWindowAction::FocusExisting => {
+            if let Some(window) = existing_window {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }
+        SettingsWindowAction::Create(spec) => {
+            let _ = WebviewWindowBuilder::new(app, spec.label, WebviewUrl::App(spec.url.into()))
+                .title(spec.title)
+                .inner_size(spec.width, spec.height)
+                .focused(spec.focused)
+                .resizable(spec.resizable)
+                .always_on_top(spec.always_on_top)
+                .build();
+        }
+    }
 }
 
 /// 恢复与当前任一显示器工作区相交的上次窗口位置。
@@ -286,6 +375,29 @@ fn get_listener_status() -> bool {
     key_listener::is_listening()
 }
 
+/// 读取当前应用设置，供设置窗口和悬浮窗口使用。
+#[tauri::command]
+fn get_application_settings(
+    settings_store: tauri::State<ApplicationSettingsStore>,
+) -> ApplicationSettings {
+    settings_store.load()
+}
+
+/// 保存应用设置并在下一次启动时恢复。
+#[tauri::command]
+fn save_application_settings(
+    app: AppHandle,
+    settings_store: tauri::State<ApplicationSettingsStore>,
+    settings: ApplicationSettings,
+) -> Result<ApplicationSettings, String> {
+    let saved_settings = settings_store
+        .save(&settings)
+        .map_err(|error| error.to_string())?;
+    app.emit(APPLICATION_SETTINGS_CHANGED_EVENT, &saved_settings)
+        .map_err(|error| error.to_string())?;
+    Ok(saved_settings)
+}
+
 /// 隐藏主窗口并暂停全局按键转发。
 #[tauri::command]
 fn hide_window(app: AppHandle) {
@@ -300,11 +412,32 @@ fn exit_app(app: AppHandle) {
 
 #[cfg(test)]
 mod tests {
-    use super::window_toggle_text;
+    use super::{settings_window_action, window_toggle_text, SettingsWindowAction};
 
     #[test]
     fn window_toggle_text_describes_the_next_action() {
         assert_eq!(window_toggle_text(true), "隐藏窗口");
         assert_eq!(window_toggle_text(false), "显示窗口");
+    }
+
+    #[test]
+    fn settings_window_entry_reuses_an_existing_window() {
+        assert_eq!(
+            settings_window_action(true),
+            SettingsWindowAction::FocusExisting
+        );
+    }
+
+    #[test]
+    fn settings_window_entry_creates_the_accepted_window() {
+        let SettingsWindowAction::Create(spec) = settings_window_action(false) else {
+            panic!("missing settings window should be created");
+        };
+
+        assert_eq!(spec.label, "settings");
+        assert_eq!(spec.url, "index.html?window=settings");
+        assert!(spec.focused);
+        assert!(!spec.always_on_top);
+        assert!(!spec.resizable);
     }
 }

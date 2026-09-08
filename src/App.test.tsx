@@ -4,6 +4,14 @@ import { App } from "./App";
 
 /** Tauri mock 的共享状态（vi.hoisted 保证在 vi.mock 工厂之前初始化）。 */
 const mocks = vi.hoisted(() => ({
+  /** 原生层返回的应用设置。 */
+  applicationSettings: {
+    version: 1,
+    schemeId: "xiaohe",
+    appearance: "system",
+    idleFadeDelayMs: 3000,
+    idleOpacity: 0.3,
+  },
   /** get_listener_status 的返回值，模拟后端监听是否已启动。 */
   listenerStatus: false,
   /** 按事件名捕获的 listen 回调，用于模拟 Rust 主动推送。 */
@@ -14,6 +22,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (cmd: string) => {
     mocks.invokedCommands.push(cmd);
+    if (cmd === "get_application_settings") return Promise.resolve(mocks.applicationSettings);
     if (cmd === "get_accessibility_permission") return Promise.resolve(true);
     if (cmd === "get_listener_status") return Promise.resolve(mocks.listenerStatus);
     return Promise.resolve(true);
@@ -39,11 +48,13 @@ vi.mock("@tauri-apps/api/window", () => ({
 
 beforeEach(() => {
   mocks.listenerStatus = false;
+  mocks.handlers = {};
   mocks.invokedCommands.length = 0;
 });
 
 afterEach(() => {
   vi.useRealTimers();
+  window.history.replaceState({}, "", "/");
 });
 
 /** 渲染应用并等待异步初始化完成，避免断言结束后仍有状态更新。 */
@@ -84,6 +95,23 @@ describe("App", () => {
 
     // 检查虚拟键盘是否存在
     expect(screen.getByRole("region", { name: "双拼虚拟键盘" })).toBeInTheDocument();
+  });
+
+  it("reads the current scheme for the floating window", async () => {
+    await renderApp();
+
+    await waitFor(() => expect(mocks.invokedCommands).toContain("get_application_settings"));
+  });
+
+  it("renders the current scheme in the settings window", async () => {
+    window.history.pushState({}, "", "/?window=settings");
+
+    render(<App />);
+
+    await waitFor(() => expect(mocks.invokedCommands).toContain("get_application_settings"));
+    expect(screen.getByText("当前方案")).toBeInTheDocument();
+    expect(await screen.findByText("小鹤双拼")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "双拼虚拟键盘" })).not.toBeInTheDocument();
   });
 
   it("renders candidate keys after a first letter and resets after the second letter", async () => {

@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { xiaoheCandidateIndex } from "../engine/shuangpin";
+import { getCandidateIndex } from "../engine/shuangpin";
 import {
   createStateMachine,
   type InputEvent,
@@ -24,6 +24,8 @@ interface UseKeyboardInputOptions {
   isListening: boolean;
   /** 用户操作时重置空闲淡化计时。 */
   reportActivity: () => void;
+  /** 当前应用设置选定的双拼方案标识。 */
+  schemeId: string;
 }
 
 /** useKeyboardInput 的返回值。 */
@@ -33,8 +35,6 @@ interface UseKeyboardInputResult {
   /** 清空当前双拼输入状态。 */
   resetInput: () => void;
 }
-
-const transition = createStateMachine(xiaoheCandidateIndex);
 
 /**
  * 将应用内键盘事件转换为双拼状态机事件。
@@ -75,8 +75,13 @@ const rustEventToInputEvent = (event: RustKeyEvent): InputEvent | null => {
 export const useKeyboardInput = ({
   isListening,
   reportActivity,
+  schemeId,
 }: UseKeyboardInputOptions): UseKeyboardInputResult => {
   const [inputState, setInputState] = useState<InputState>({ phase: "idle" }); //双拼输入状态
+  const transition = useMemo(
+    () => createStateMachine(getCandidateIndex(schemeId)),
+    [schemeId],
+  ); //当前方案状态转换函数
 
   /** 清空当前双拼输入状态。 */
   const resetInput = useCallback(() => {
@@ -115,7 +120,7 @@ export const useKeyboardInput = ({
       disposed = true;
       unlisteners.forEach((unlisten) => unlisten());
     };
-  }, [reportActivity, resetInput]);
+  }, [reportActivity, resetInput, transition]);
 
   // 全局监听停止时，使用浏览器 keydown 作为输入 fallback
   useEffect(() => {
@@ -132,7 +137,7 @@ export const useKeyboardInput = ({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isListening, reportActivity]);
+  }, [isListening, reportActivity, transition]);
 
   return { inputState, resetInput };
 };

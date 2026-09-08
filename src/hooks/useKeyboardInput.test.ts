@@ -22,7 +22,7 @@ beforeEach(() => {
 describe("useKeyboardInput", () => {
   it("advances the input state and reports activity for a Rust key event", async () => {
     const reportActivity = vi.fn();
-    const { result } = renderHook(() => useKeyboardInput({ isListening: true, reportActivity }));
+    const { result } = renderHook(() => useKeyboardInput({ isListening: true, reportActivity, schemeId: "xiaohe" }));
 
     await waitFor(() => expect(mocks.handlers["key-event"]).toBeDefined());
     await act(async () => {
@@ -36,7 +36,7 @@ describe("useKeyboardInput", () => {
   it("only accepts browser keydown events while the global listener is stopped", () => {
     const reportActivity = vi.fn();
     const { result, rerender } = renderHook(
-      ({ isListening }) => useKeyboardInput({ isListening, reportActivity }),
+      ({ isListening }) => useKeyboardInput({ isListening, reportActivity, schemeId: "xiaohe" }),
       { initialProps: { isListening: true } },
     );
 
@@ -55,7 +55,7 @@ describe("useKeyboardInput", () => {
   });
 
   it("ignores browser keys with modifiers while the fallback is active", () => {
-    const { result } = renderHook(() => useKeyboardInput({ isListening: false, reportActivity: vi.fn() }));
+    const { result } = renderHook(() => useKeyboardInput({ isListening: false, reportActivity: vi.fn(), schemeId: "xiaohe" }));
 
     act(() => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "d", metaKey: true }));
@@ -65,7 +65,7 @@ describe("useKeyboardInput", () => {
   });
 
   it("resets input after the native window-hidden event", async () => {
-    const { result } = renderHook(() => useKeyboardInput({ isListening: true, reportActivity: vi.fn() }));
+    const { result } = renderHook(() => useKeyboardInput({ isListening: true, reportActivity: vi.fn(), schemeId: "xiaohe" }));
 
     await waitFor(() => expect(mocks.handlers["key-event"]).toBeDefined());
     await act(async () => {

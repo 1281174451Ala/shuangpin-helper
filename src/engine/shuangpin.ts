@@ -1,5 +1,5 @@
-import scheme from "../../config/shuangpin.json";
-import candidats from "../../config/syllables-candidates.json";
+import xiaoheSchemeData from "../../config/shuangpin.json";
+import candidates from "../../config/syllables-candidates.json";
 
 /** 双拼键的分类。 */
 export type ShuangpinKeyType = "initial" | "final";
@@ -31,8 +31,6 @@ export interface SyllableData {
   /** 声母类别到合法韵母集合的映射 */
   syllables: Record<string, string[]>;
 }
-
-const shuangpinScheme = scheme as ShuangpinScheme;
 
 /**
  * 根据方案和已审定音节数据预生成首键候选索引。
@@ -87,12 +85,6 @@ export const createCandidateIndex = (
   return candidateIndex;
 };
 
-/** 已审定小鹤配置预生成的首键候选索引。 */
-export const xiaoheCandidateIndex = createCandidateIndex(
-  shuangpinScheme,
-  candidats as SyllableData,
-);
-
 /** 一个键的声母和韵母映射。 */
 export interface KeyMappings {
   /** 键盘上的字母键 */
@@ -103,23 +95,97 @@ export interface KeyMappings {
   finals?: string[];
 }
 
-/** 模块级缓存：26 个字母的映射在加载时一次性计算，后续调用零分配。 */
-const keyMappingsCache = new Map<string, KeyMappings>();
-
-for (const ch of "abcdefghijklmnopqrstuvwxyz") {
-  keyMappingsCache.set(ch, {
-    key: ch,
-    initial: shuangpinScheme.initials[ch],
-    finals: shuangpinScheme.finals[ch],
-  });
+/** 可供设置窗口展示的方案摘要。 */
+export interface ShuangpinSchemeSummary {
+  /** 稳定的方案标识 */
+  id: string;
+  /** 面向用户的方案名称 */
+  displayName: string;
 }
+
+/** 已校验并预计算的方案注册项。 */
+interface RegisteredShuangpinScheme extends ShuangpinSchemeSummary {
+  /** 物理首键到合法第二键的索引 */
+  candidateIndex: ReadonlyMap<string, ReadonlySet<string>>;
+  /** 物理键到声韵母标签的索引 */
+  keyMappings: ReadonlyMap<string, KeyMappings>;
+}
+
+/**
+ * 为一个方案生成键帽显示索引。
+ * @param shuangpin 双拼方案映射
+ * @returns 物理键到声韵母标签的索引
+ */
+const createKeyMappingsIndex = (
+  shuangpin: ShuangpinScheme,
+): ReadonlyMap<string, KeyMappings> => {
+  const index = new Map<string, KeyMappings>(); //方案键帽映射索引
+
+  for (const key of "abcdefghijklmnopqrstuvwxyz") {
+    index.set(key, {
+      key,
+      initial: shuangpin.initials[key],
+      finals: shuangpin.finals[key],
+    });
+  }
+
+  return index;
+};
+
+/** 首版内置方案注册表，仅登记小鹤双拼。 */
+const schemeRegistry: ReadonlyMap<string, RegisteredShuangpinScheme> = new Map([
+  [
+    "xiaohe",
+    {
+      id: "xiaohe",
+      displayName: "小鹤双拼",
+      candidateIndex: createCandidateIndex(
+        xiaoheSchemeData as ShuangpinScheme,
+        candidates as SyllableData,
+      ),
+      keyMappings: createKeyMappingsIndex(xiaoheSchemeData as ShuangpinScheme),
+    },
+  ],
+]);
+
+/**
+ * 解析已登记的双拼方案。
+ * @param schemeId 应用设置中的方案标识
+ * @returns 对应的方案注册项
+ */
+const resolveScheme = (schemeId: string): RegisteredShuangpinScheme => {
+  const registeredScheme = schemeRegistry.get(schemeId);
+  if (!registeredScheme) {
+    throw new Error(`Unknown shuangpin scheme "${schemeId}"`);
+  }
+  return registeredScheme;
+};
+
+/**
+ * 列出可供设置窗口展示的内置双拼方案。
+ * @returns 已登记方案的稳定标识和显示名称
+ */
+export const listShuangpinSchemes = (): ShuangpinSchemeSummary[] => {
+  return [...schemeRegistry.values()].map(({ id, displayName }) => ({ id, displayName }));
+};
+
+/**
+ * 取得指定方案的候选第二键索引。
+ * @param schemeId 应用设置中的方案标识
+ * @returns 物理首键到合法第二键集合的映射
+ */
+export const getCandidateIndex = (
+  schemeId: string,
+): ReadonlyMap<string, ReadonlySet<string>> => {
+  return resolveScheme(schemeId).candidateIndex;
+};
 
 /**
  * 查询一个键的声母和韵母映射（结果来自模块级缓存，无运行时分配）。
  * @param key 要查询的英文字母键
  * @returns 包含声母和韵母的映射信息
  */
-export const getKeyMappings = (key: string): KeyMappings => {
+export const getKeyMappings = (key: string, schemeId: string): KeyMappings => {
   const normalizedKey = key.toLowerCase();
-  return keyMappingsCache.get(normalizedKey) ?? { key: normalizedKey };
+  return resolveScheme(schemeId).keyMappings.get(normalizedKey) ?? { key: normalizedKey };
 };

@@ -9,7 +9,7 @@ describe("VirtualKeyboard", () => {
       phase: "waitingSecondKey",
       candidateKeys: new Set(["e", "h"]),
     };
-    render(<VirtualKeyboard inputState={inputState} />);
+    render(<VirtualKeyboard inputState={inputState} schemeId="xiaohe" />);
 
     expect(screen.getByRole("button", { name: /^H/i })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: /^B/i })).toBeDisabled();
@@ -20,7 +20,7 @@ describe("VirtualKeyboard", () => {
 
     render(
       <div onMouseDown={() => { dragStartCount += 1; }}>
-        <VirtualKeyboard inputState={{ phase: "idle" }} />
+        <VirtualKeyboard inputState={{ phase: "idle" }} schemeId="xiaohe" />
       </div>,
     );
 

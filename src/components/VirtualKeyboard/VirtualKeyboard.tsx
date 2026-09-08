@@ -16,6 +16,8 @@ const handleExit = () => invoke("hide_window").catch(console.error);
 interface VirtualKeyboardProps {
   /** 当前双拼输入状态 */
   inputState: InputState;
+  /** 当前方案标识 */
+  schemeId: string;
 }
 
 /**
@@ -23,13 +25,13 @@ interface VirtualKeyboardProps {
  * @param props 当前输入及候选按键状态
  * @returns 虚拟键盘元素
  */
-export const VirtualKeyboard = memo(({ inputState }: VirtualKeyboardProps) => {
+export const VirtualKeyboard = memo(({ inputState, schemeId }: VirtualKeyboardProps) => {
   return (
     <section aria-label="双拼虚拟键盘" className="grid gap-2">
       {keyboardRows.map((row, rowIndex) => (
         <div className="flex justify-center gap-1.5" key={row}>
           {[...row].map((letter) => {
-            const mappings = getKeyMappings(letter);
+            const mappings = getKeyMappings(letter, schemeId);
             const candidateMode = inputState.phase === "waitingSecondKey";
             const displayState = !candidateMode
               ? "default"

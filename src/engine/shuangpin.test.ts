@@ -1,9 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { getKeyMappings, xiaoheCandidateIndex } from "./shuangpin";
+import {
+  getCandidateIndex,
+  getKeyMappings,
+  listShuangpinSchemes,
+} from "./shuangpin";
+
+describe("scheme registry", () => {
+  it("registers only Xiaohe Shuangpin for the first release", () => {
+    expect(listShuangpinSchemes()).toEqual([
+      { id: "xiaohe", displayName: "小鹤双拼" },
+    ]);
+  });
+});
 
 describe("getKeyMappings", () => {
   it("returns both initial and final mappings for a key", () => {
-    expect(getKeyMappings("h")).toEqual({
+    expect(getKeyMappings("h", "xiaohe")).toEqual({
       key: "h",
       initial: "h",
       finals: ["ang"],
@@ -11,7 +23,7 @@ describe("getKeyMappings", () => {
   });
 
   it("handles multiple finals in array", () => {
-    expect(getKeyMappings("r")).toEqual({
+    expect(getKeyMappings("r", "xiaohe")).toEqual({
       key: "r",
       initial: "r",
       finals: ["uan", "van"],
@@ -19,7 +31,7 @@ describe("getKeyMappings", () => {
   });
 
   it("returns single final mapping as array", () => {
-    expect(getKeyMappings("q")).toEqual({
+    expect(getKeyMappings("q", "xiaohe")).toEqual({
       key: "q",
       initial: "q",
       finals: ["iu"],
@@ -27,10 +39,11 @@ describe("getKeyMappings", () => {
   });
 });
 
-describe("xiaoheCandidateIndex", () => {
+describe("getCandidateIndex", () => {
   it("contains a non-empty candidate set for every lowercase letter", () => {
     const letters = "abcdefghijklmnopqrstuvwxyz";
+    const candidateIndex = getCandidateIndex("xiaohe");
 
-    expect([...letters].every((letter) => (xiaoheCandidateIndex.get(letter)?.size ?? 0) > 0)).toBe(true);
+    expect([...letters].every((letter) => (candidateIndex.get(letter)?.size ?? 0) > 0)).toBe(true);
   });
 });
