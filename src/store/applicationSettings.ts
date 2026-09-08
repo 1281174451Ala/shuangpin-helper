@@ -28,6 +28,8 @@ interface ApplicationSettingsState {
   settings: ApplicationSettings | null;
   /** 读取失败原因 */
   error: Error | null;
+  /** 本次启动是否从无效设置恢复 */
+  recoveredFromInvalidSettings: boolean;
 }
 
 /**
@@ -36,6 +38,14 @@ interface ApplicationSettingsState {
  */
 export const readApplicationSettings = (): Promise<ApplicationSettings> => {
   return invoke<ApplicationSettings>("get_application_settings");
+};
+
+/**
+ * 查询本次启动是否曾从无效设置恢复。
+ * @returns 是否需要在设置窗口展示恢复提示
+ */
+export const readApplicationSettingsRecoveryStatus = (): Promise<boolean> => {
+  return invoke<boolean>("get_application_settings_recovery_status");
 };
 
 /**
@@ -69,6 +79,7 @@ export const subscribeApplicationSettings = (
 export const useApplicationSettings = (): ApplicationSettingsState => {
   const [settings, setSettings] = useState<ApplicationSettings | null>(null); //当前应用设置
   const [error, setError] = useState<Error | null>(null); //设置读取错误
+  const [recoveredFromInvalidSettings, setRecoveredFromInvalidSettings] = useState(false); //设置恢复状态
 
   // 挂载时从原生唯一来源读取应用设置
   useEffect(() => {
@@ -88,8 +99,15 @@ export const useApplicationSettings = (): ApplicationSettingsState => {
       }
 
       try {
+        const recovered = await readApplicationSettingsRecoveryStatus().catch((reason: unknown) => {
+          console.warn("读取应用设置恢复状态失败", reason);
+          return false;
+        });
         const initialSettings = await readApplicationSettings();
-        if (!disposed && !receivedChange) setSettings(initialSettings);
+        if (!disposed) {
+          setRecoveredFromInvalidSettings(recovered);
+          if (!receivedChange) setSettings(initialSettings);
+        }
       } catch (reason: unknown) {
         if (!disposed) {
           setError(reason instanceof Error ? reason : new Error(String(reason)));
@@ -105,5 +123,5 @@ export const useApplicationSettings = (): ApplicationSettingsState => {
     };
   }, []);
 
-  return { settings, error };
+  return { settings, error, recoveredFromInvalidSettings };
 };

@@ -75,7 +75,9 @@ describe("applicationSettings bridge", () => {
       idleOpacity: 0.3,
     };
     const changedSettings = { ...initialSettings, appearance: "dark" };
-    mocks.invoke.mockResolvedValue(initialSettings);
+    mocks.invoke.mockImplementation((command) => Promise.resolve(
+      command === "get_application_settings_recovery_status" ? false : initialSettings,
+    ));
     mocks.listen.mockImplementation((name, handler) => {
       mocks.handlers[name] = handler;
       return Promise.resolve(() => {});
@@ -101,7 +103,9 @@ describe("applicationSettings bridge", () => {
       idleOpacity: 0.3,
     };
     mocks.listen.mockRejectedValue(new Error("events unavailable"));
-    mocks.invoke.mockResolvedValue(settings);
+    mocks.invoke.mockImplementation((command) => Promise.resolve(
+      command === "get_application_settings_recovery_status" ? false : settings,
+    ));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const { result } = renderHook(() => useApplicationSettings());

@@ -216,6 +216,7 @@ pub fn run() {
             start_key_listener,
             get_listener_status,
             get_application_settings,
+            get_application_settings_recovery_status,
             save_application_settings,
             hide_window,
             exit_app
@@ -381,6 +382,14 @@ fn get_application_settings(
     settings_store: tauri::State<ApplicationSettingsStore>,
 ) -> ApplicationSettings {
     settings_store.load()
+}
+
+/// 查询本次启动是否曾从无效应用设置恢复。
+#[tauri::command]
+fn get_application_settings_recovery_status(
+    settings_store: tauri::State<ApplicationSettingsStore>,
+) -> bool {
+    settings_store.recovered_from_invalid_settings()
 }
 
 /// 保存应用设置并在下一次启动时恢复。

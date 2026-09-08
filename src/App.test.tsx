@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
     idleFadeDelayMs: 3000,
     idleOpacity: 0.3,
   },
+  /** 本次启动是否从无效设置恢复。 */
+  recoveredFromInvalidSettings: false,
   /** get_listener_status 的返回值，模拟后端监听是否已启动。 */
   listenerStatus: false,
   /** 按事件名捕获的 listen 回调，用于模拟 Rust 主动推送。 */
@@ -23,6 +25,9 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: (cmd: string) => {
     mocks.invokedCommands.push(cmd);
     if (cmd === "get_application_settings") return Promise.resolve(mocks.applicationSettings);
+    if (cmd === "get_application_settings_recovery_status") {
+      return Promise.resolve(mocks.recoveredFromInvalidSettings);
+    }
     if (cmd === "get_accessibility_permission") return Promise.resolve(true);
     if (cmd === "get_listener_status") return Promise.resolve(mocks.listenerStatus);
     return Promise.resolve(true);
@@ -48,6 +53,7 @@ vi.mock("@tauri-apps/api/window", () => ({
 
 beforeEach(() => {
   mocks.listenerStatus = false;
+  mocks.recoveredFromInvalidSettings = false;
   mocks.handlers = {};
   mocks.invokedCommands.length = 0;
 });
@@ -112,6 +118,17 @@ describe("App", () => {
     expect(screen.getByText("当前方案")).toBeInTheDocument();
     expect(await screen.findByText("小鹤双拼")).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "双拼虚拟键盘" })).not.toBeInTheDocument();
+  });
+
+  it("reports when invalid settings were recovered", async () => {
+    mocks.recoveredFromInvalidSettings = true;
+    window.history.pushState({}, "", "/?window=settings");
+
+    render(<App />);
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "设置文件无效，已恢复默认设置并保留诊断副本",
+    );
   });
 
   it("renders candidate keys after a first letter and resets after the second letter", async () => {
