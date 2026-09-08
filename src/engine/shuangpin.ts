@@ -183,6 +183,7 @@ export const getCandidateIndex = (
 /**
  * 查询一个键的声母和韵母映射（结果来自模块级缓存，无运行时分配）。
  * @param key 要查询的英文字母键
+ * @param schemeId 应用设置中的方案标识
  * @returns 包含声母和韵母的映射信息
  */
 export const getKeyMappings = (key: string, schemeId: string): KeyMappings => {

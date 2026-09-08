@@ -36,6 +36,13 @@ impl Default for ApplicationSettings {
     }
 }
 
+impl ApplicationSettings {
+    /// 判断设置版本与方案是否受当前应用版本支持。
+    fn is_supported(&self) -> bool {
+        self.version == 1 && self.scheme_id == "xiaohe"
+    }
+}
+
 /// 应用设置的文件存储。
 pub(crate) struct ApplicationSettingsStore {
     /// 设置文件路径。
@@ -53,11 +60,18 @@ impl ApplicationSettingsStore {
         fs::read_to_string(&self.path)
             .ok()
             .and_then(|contents| serde_json::from_str(&contents).ok())
+            .filter(ApplicationSettings::is_supported)
             .unwrap_or_default()
     }
 
     /// 原子写入设置，避免中断时留下半截 JSON。
     pub(crate) fn save(&self, settings: &ApplicationSettings) -> io::Result<ApplicationSettings> {
+        if !settings.is_supported() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "unsupported settings version or scheme",
+            ));
+        }
         if let Some(parent) = self.path.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -115,5 +129,36 @@ mod tests {
         assert_eq!(value["idleFadeDelayMs"], 3_000);
         assert_eq!(value["idleOpacity"], 0.3);
         assert!(value.get("scheme_id").is_none());
+    }
+
+    #[test]
+    fn falls_back_when_the_persisted_scheme_is_not_registered() {
+        let path = temporary_settings_path();
+        fs::write(
+            &path,
+            r#"{"version":1,"schemeId":"unknown","appearance":"system","idleFadeDelayMs":3000,"idleOpacity":0.3}"#,
+        )
+        .expect("invalid settings fixture should be written");
+        let store = ApplicationSettingsStore::new(path.clone());
+
+        assert_eq!(store.load(), ApplicationSettings::default());
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn rejects_saving_a_scheme_that_is_not_registered() {
+        let path = temporary_settings_path();
+        let store = ApplicationSettingsStore::new(path.clone());
+        let settings = ApplicationSettings {
+            scheme_id: "unknown".to_owned(),
+            ..ApplicationSettings::default()
+        };
+
+        let error = store
+            .save(&settings)
+            .expect_err("unknown scheme should be rejected");
+
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert!(!path.exists());
     }
 }
