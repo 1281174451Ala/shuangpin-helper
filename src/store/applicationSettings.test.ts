@@ -74,7 +74,7 @@ describe("applicationSettings bridge", () => {
       idleFadeDelayMs: 3000,
       idleOpacity: 0.3,
     };
-    const changedSettings = { ...initialSettings, appearance: "dark" };
+    const changedSettings: ApplicationSettings = { ...initialSettings, appearance: "dark" };
     mocks.invoke.mockImplementation((command) => Promise.resolve(
       command === "get_application_settings_recovery_status" ? false : initialSettings,
     ));
@@ -92,6 +92,86 @@ describe("applicationSettings bridge", () => {
     });
 
     expect(result.current.settings).toEqual(changedSettings);
+  });
+
+  it("previews a complete settings update before persistence finishes", async () => {
+    const initialSettings: ApplicationSettings = {
+      version: 1,
+      schemeId: "xiaohe",
+      appearance: "system",
+      idleFadeDelayMs: 3000,
+      idleOpacity: 0.3,
+    };
+    const changedSettings: ApplicationSettings = { ...initialSettings, appearance: "light" };
+    mocks.invoke.mockImplementation((command) => {
+      if (command === "save_application_settings") return new Promise(() => {});
+      return Promise.resolve(
+        command === "get_application_settings_recovery_status" ? false : initialSettings,
+      );
+    });
+    mocks.listen.mockResolvedValue(() => {});
+    const { result } = renderHook(() => useApplicationSettings());
+    await waitFor(() => expect(result.current.settings).toEqual(initialSettings));
+
+    act(() => {
+      void result.current.updateSettings(changedSettings);
+    });
+
+    expect(result.current.settings).toEqual(changedSettings);
+    await waitFor(() => {
+      expect(mocks.invoke).toHaveBeenCalledWith("save_application_settings", {
+        settings: changedSettings,
+      });
+    });
+  });
+
+  it("serializes rapid settings writes while keeping the latest preview", async () => {
+    const initialSettings: ApplicationSettings = {
+      version: 1,
+      schemeId: "xiaohe",
+      appearance: "system",
+      idleFadeDelayMs: 3000,
+      idleOpacity: 0.3,
+    };
+    const firstSettings: ApplicationSettings = { ...initialSettings, idleOpacity: 0.35 };
+    const latestSettings: ApplicationSettings = { ...initialSettings, idleOpacity: 0.4 };
+    let finishFirstSave: (settings: ApplicationSettings) => void = () => {};
+    const firstSave = new Promise<ApplicationSettings>((resolve) => {
+      finishFirstSave = resolve;
+    });
+    mocks.invoke.mockImplementation((command, args) => {
+      if (command === "get_application_settings_recovery_status") return Promise.resolve(false);
+      if (command === "get_application_settings") return Promise.resolve(initialSettings);
+      const saveCalls = mocks.invoke.mock.calls.filter(([name]) => {
+        return name === "save_application_settings";
+      });
+      return saveCalls.length === 1 ? firstSave : Promise.resolve(args.settings);
+    });
+    mocks.listen.mockResolvedValue(() => {});
+    const { result } = renderHook(() => useApplicationSettings());
+    await waitFor(() => expect(result.current.settings).toEqual(initialSettings));
+
+    let firstResult = Promise.resolve(firstSettings);
+    let latestResult = Promise.resolve(latestSettings);
+    act(() => {
+      firstResult = result.current.updateSettings(firstSettings);
+      latestResult = result.current.updateSettings(latestSettings);
+    });
+
+    expect(result.current.settings).toEqual(latestSettings);
+    await waitFor(() => {
+      expect(mocks.invoke.mock.calls.filter(([name]) => name === "save_application_settings"))
+        .toHaveLength(1);
+    });
+
+    await act(async () => {
+      finishFirstSave(firstSettings);
+      await firstResult;
+    });
+    await latestResult;
+
+    expect(mocks.invoke.mock.calls.filter(([name]) => name === "save_application_settings"))
+      .toHaveLength(2);
   });
 
   it("still reads settings when the change subscription is unavailable", async () => {

@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
+import type { ApplicationSettings } from "./store/applicationSettings";
 
 /** Tauri mock 的共享状态（vi.hoisted 保证在 vi.mock 工厂之前初始化）。 */
 const mocks = vi.hoisted(() => ({
@@ -11,7 +12,7 @@ const mocks = vi.hoisted(() => ({
     appearance: "system",
     idleFadeDelayMs: 3000,
     idleOpacity: 0.3,
-  },
+  } as ApplicationSettings,
   /** 本次启动是否从无效设置恢复。 */
   recoveredFromInvalidSettings: false,
   /** get_listener_status 的返回值，模拟后端监听是否已启动。 */
@@ -19,14 +20,23 @@ const mocks = vi.hoisted(() => ({
   /** 按事件名捕获的 listen 回调，用于模拟 Rust 主动推送。 */
   handlers: {} as Record<string, (event: { payload: unknown }) => void>,
   invokedCommands: [] as string[],
+  /** 传给保存命令的完整设置。 */
+  savedSettings: [] as ApplicationSettings[],
+  /** 系统外观媒体查询变化监听器。 */
+  appearanceListeners: [] as Array<(event: MediaQueryListEvent) => void>,
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: (cmd: string) => {
+  invoke: (cmd: string, args?: { settings?: ApplicationSettings }) => {
     mocks.invokedCommands.push(cmd);
     if (cmd === "get_application_settings") return Promise.resolve(mocks.applicationSettings);
     if (cmd === "get_application_settings_recovery_status") {
       return Promise.resolve(mocks.recoveredFromInvalidSettings);
+    }
+    if (cmd === "save_application_settings" && args?.settings) {
+      mocks.savedSettings.push(args.settings);
+      mocks.applicationSettings = args.settings;
+      return Promise.resolve(args.settings);
     }
     if (cmd === "get_accessibility_permission") return Promise.resolve(true);
     if (cmd === "get_listener_status") return Promise.resolve(mocks.listenerStatus);
@@ -52,10 +62,30 @@ vi.mock("@tauri-apps/api/window", () => ({
 }));
 
 beforeEach(() => {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: vi.fn().mockReturnValue({
+      matches: false,
+      media: "(prefers-color-scheme: dark)",
+      addEventListener: vi.fn((name: string, listener: (event: MediaQueryListEvent) => void) => {
+        if (name === "change") mocks.appearanceListeners.push(listener);
+      }),
+      removeEventListener: vi.fn(),
+    }),
+  });
+  mocks.applicationSettings = {
+    version: 1,
+    schemeId: "xiaohe",
+    appearance: "system",
+    idleFadeDelayMs: 3000,
+    idleOpacity: 0.3,
+  };
   mocks.listenerStatus = false;
   mocks.recoveredFromInvalidSettings = false;
   mocks.handlers = {};
   mocks.invokedCommands.length = 0;
+  mocks.savedSettings.length = 0;
+  mocks.appearanceListeners.length = 0;
 });
 
 afterEach(() => {
@@ -96,6 +126,98 @@ describe("App", () => {
     expect(document.querySelector("main")).toHaveStyle({ opacity: "1" });
   });
 
+  it("uses the configured idle delay and opacity", async () => {
+    vi.useFakeTimers();
+    mocks.applicationSettings = {
+      ...mocks.applicationSettings,
+      idleFadeDelayMs: 1000,
+      idleOpacity: 0.55,
+    };
+    render(<App />);
+    await act(async () => {});
+
+    act(() => {
+      vi.advanceTimersByTime(999);
+    });
+    expect(document.querySelector("main")).toHaveStyle({ opacity: "1" });
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(document.querySelector("main")).toHaveStyle({ opacity: "0.55" });
+  });
+
+  it("never lowers opacity when idle fading is disabled", async () => {
+    vi.useFakeTimers();
+    mocks.applicationSettings = {
+      ...mocks.applicationSettings,
+      idleFadeDelayMs: null,
+    };
+    render(<App />);
+    await act(async () => {});
+
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+
+    expect(document.querySelector("main")).toHaveStyle({ opacity: "1" });
+  });
+
+  it("restores full opacity on keyboard activity", async () => {
+    vi.useFakeTimers();
+    mocks.applicationSettings = {
+      ...mocks.applicationSettings,
+      idleFadeDelayMs: 1000,
+      idleOpacity: 0.55,
+    };
+    render(<App />);
+    await act(async () => {});
+
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(document.querySelector("main")).toHaveStyle({ opacity: "0.55" });
+
+    fireEvent.keyDown(window, { key: "d" });
+
+    expect(document.querySelector("main")).toHaveStyle({ opacity: "1" });
+  });
+
+  it("applies settings changes broadcast from another window", async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {});
+
+    act(() => {
+      mocks.handlers["application-settings-changed"]({
+        payload: {
+          ...mocks.applicationSettings,
+          appearance: "dark",
+          idleFadeDelayMs: 1000,
+          idleOpacity: 0.55,
+        },
+      });
+    });
+    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
+
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(document.querySelector("main")).toHaveStyle({ opacity: "0.55" });
+  });
+
+  it("keeps following macOS appearance changes in system mode", async () => {
+    render(<App />);
+    await waitFor(() => expect(mocks.appearanceListeners).toHaveLength(1));
+    expect(document.documentElement).toHaveAttribute("data-theme", "light");
+
+    act(() => {
+      mocks.appearanceListeners[0]({ matches: true } as MediaQueryListEvent);
+    });
+
+    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
+  });
+
   it("renders the shuangpin learning keyboard", async () => {
     await renderApp();
 
@@ -118,6 +240,46 @@ describe("App", () => {
     expect(screen.getByText("当前方案")).toBeInTheDocument();
     expect(await screen.findByText("小鹤双拼")).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "双拼虚拟键盘" })).not.toBeInTheDocument();
+  });
+
+  it("immediately previews and persists an appearance selection", async () => {
+    window.history.pushState({}, "", "/?window=settings");
+    render(<App />);
+
+    expect(await screen.findAllByRole("radio")).toHaveLength(3);
+    fireEvent.click(await screen.findByRole("radio", { name: "浅色" }));
+
+    await waitFor(() => expect(mocks.savedSettings[mocks.savedSettings.length - 1]).toMatchObject({
+      appearance: "light",
+    }));
+    expect(document.documentElement).toHaveAttribute("data-theme", "light");
+    expect(screen.queryByRole("button", { name: /保存|取消/ })).not.toBeInTheDocument();
+  });
+
+  it("offers only valid idle fade delays and opacity increments", async () => {
+    window.history.pushState({}, "", "/?window=settings");
+    render(<App />);
+
+    const delaySelect = await screen.findByLabelText("空闲淡化");
+    const opacityInput = screen.getByLabelText("空闲透明度");
+    expect(delaySelect).toHaveValue("3000");
+    expect(opacityInput).toHaveValue("30");
+    expect(delaySelect.querySelectorAll("option")).toHaveLength(31);
+    expect(delaySelect).toContainHTML('<option value="1000">1 秒</option>');
+    expect(delaySelect).toContainHTML('<option value="30000">30 秒</option>');
+    expect(opacityInput).toHaveAttribute("min", "20");
+    expect(opacityInput).toHaveAttribute("max", "100");
+    expect(opacityInput).toHaveAttribute("step", "5");
+
+    fireEvent.change(delaySelect, { target: { value: "none" } });
+    await waitFor(() => expect(mocks.savedSettings[mocks.savedSettings.length - 1]).toMatchObject({
+      idleFadeDelayMs: null,
+    }));
+
+    fireEvent.change(opacityInput, { target: { value: "55" } });
+    await waitFor(() => expect(mocks.savedSettings[mocks.savedSettings.length - 1]).toMatchObject({
+      idleOpacity: 0.55,
+    }));
   });
 
   it("reports when invalid settings were recovered", async () => {

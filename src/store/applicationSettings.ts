@@ -1,12 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /** 原生层广播应用设置变化时使用的事件名。 */
 const APPLICATION_SETTINGS_CHANGED_EVENT = "application-settings-changed";
 
 /** 应用设置变化订阅者。 */
 export type ApplicationSettingsListener = (settings: ApplicationSettings) => void;
+
+/** 用户可选择的外观模式。 */
+export type AppearanceMode = "system" | "light" | "dark";
 
 /** 原生层持久化的应用设置。 */
 export interface ApplicationSettings {
@@ -15,7 +18,7 @@ export interface ApplicationSettings {
   /** 当前双拼方案标识 */
   schemeId: string;
   /** 外观模式 */
-  appearance: string;
+  appearance: AppearanceMode;
   /** 空闲淡化延时；null 表示不淡化 */
   idleFadeDelayMs: number | null;
   /** 空闲时的窗口不透明度 */
@@ -30,6 +33,8 @@ interface ApplicationSettingsState {
   error: Error | null;
   /** 本次启动是否从无效设置恢复 */
   recoveredFromInvalidSettings: boolean;
+  /** 立即预览并尝试持久化一份完整设置 */
+  updateSettings: (settings: ApplicationSettings) => Promise<ApplicationSettings>;
 }
 
 /**
@@ -80,6 +85,17 @@ export const useApplicationSettings = (): ApplicationSettingsState => {
   const [settings, setSettings] = useState<ApplicationSettings | null>(null); //当前应用设置
   const [error, setError] = useState<Error | null>(null); //设置读取错误
   const [recoveredFromInvalidSettings, setRecoveredFromInvalidSettings] = useState(false); //设置恢复状态
+  const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve()); //设置持久化队列
+
+  /** 先更新本窗口预览，再由原生唯一来源持久化并广播。 */
+  const updateSettings = useCallback((nextSettings: ApplicationSettings) => {
+    setSettings(nextSettings);
+    const saveRequest = saveQueueRef.current
+      .catch(() => undefined)
+      .then(() => saveApplicationSettings(nextSettings));
+    saveQueueRef.current = saveRequest;
+    return saveRequest;
+  }, []); //即时应用设置
 
   // 挂载时从原生唯一来源读取应用设置
   useEffect(() => {
@@ -123,5 +139,5 @@ export const useApplicationSettings = (): ApplicationSettingsState => {
     };
   }, []);
 
-  return { settings, error, recoveredFromInvalidSettings };
+  return { settings, error, recoveredFromInvalidSettings, updateSettings };
 };

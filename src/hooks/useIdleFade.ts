@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 /** useIdleFade 的配置项。 */
 interface UseIdleFadeOptions {
-  /** 无活动多久后进入空闲淡化状态（毫秒）。默认 3000。后续设置页可自定义。 */
-  delay?: number;
+  /** 无活动多久后进入空闲淡化状态（毫秒）；null 表示不淡化。默认 3000。 */
+  delay?: number | null;
 }
 
 /** useIdleFade 的返回值。 */
@@ -23,8 +23,8 @@ interface UseIdleFadeResult {
 export const useIdleFade = ({
   delay = 3000,
 }: UseIdleFadeOptions = {}): UseIdleFadeResult => {
-  const [isIdle, setIsIdle] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isIdle, setIsIdle] = useState(false); //是否处于空闲状态
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null); //空闲定时器
 
   /**
    * （重新）排定空闲定时器：清掉旧定时器并在 delay 后置 isIdle=true。
@@ -32,11 +32,17 @@ export const useIdleFade = ({
   const scheduleIdle = useCallback(() => {
     if (timerRef.current !== null) {
       clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setIsIdle(false);
+    if (delay === null) {
+      return;
     }
     timerRef.current = setTimeout(() => {
+      timerRef.current = null;
       setIsIdle(true);
     }, delay);
-  }, [delay]);
+  }, [delay]); //空闲定时排程
 
   /**
    * 上报用户活动：立即退出空闲并重置计时。
@@ -44,7 +50,7 @@ export const useIdleFade = ({
   const reportActivity = useCallback(() => {
     setIsIdle(false);
     scheduleIdle();
-  }, [scheduleIdle]);
+  }, [scheduleIdle]); //活动上报处理
 
   // 挂载即开始空闲计时；卸载时清理定时器，避免泄漏与卸载后 setState
   useEffect(() => {
@@ -52,6 +58,7 @@ export const useIdleFade = ({
     return () => {
       if (timerRef.current !== null) {
         clearTimeout(timerRef.current);
+        timerRef.current = null;
       }
     };
   }, [scheduleIdle]);

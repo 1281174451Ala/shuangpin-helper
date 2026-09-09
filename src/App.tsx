@@ -4,16 +4,12 @@ import { SettingsView } from "./components/SettingsView/SettingsView";
 import { useGlobalKeyListener } from "./hooks/useGlobalKeyListener";
 import { useIdleFade } from "./hooks/useIdleFade";
 import { useKeyboardInput } from "./hooks/useKeyboardInput";
+import { useResolvedAppearance } from "./hooks/useResolvedAppearance";
 import { useWindowInteraction } from "./hooks/useWindowInteraction";
 import {
   type ApplicationSettings,
   useApplicationSettings,
 } from "./store/applicationSettings";
-
-/** 空闲多久后自动淡化（毫秒）。后续设置页可自定义。 */
-const IDLE_DELAY_MS = 3000;
-/** 空闲时的透明度。后续设置页可自定义。 */
-const IDLE_OPACITY = 0.3;
 
 /**
  * 渲染双拼学习悬浮窗口的最小界面。
@@ -56,7 +52,8 @@ const FloatingWindow = () => {
  * @returns 悬浮窗口内容
  */
 const FloatingWindowContent = ({ settings }: FloatingWindowContentProps) => {
-  const { isIdle, reportActivity } = useIdleFade({ delay: IDLE_DELAY_MS });
+  const resolvedAppearance = useResolvedAppearance(settings.appearance); //当前有效外观
+  const { isIdle, reportActivity } = useIdleFade({ delay: settings.idleFadeDelayMs }); //空闲淡化状态
   const { isListening } = useGlobalKeyListener();
   const { inputState, resetInput } = useKeyboardInput({
     isListening,
@@ -64,6 +61,11 @@ const FloatingWindowContent = ({ settings }: FloatingWindowContentProps) => {
     schemeId: settings.schemeId,
   });
   const { cardRef, handleMouseDown } = useWindowInteraction({ reportActivity });
+
+  // 将设置解析后的主题应用到当前悬浮窗口
+  useEffect(() => {
+    document.documentElement.dataset.theme = resolvedAppearance;
+  }, [resolvedAppearance]);
 
   // 空闲时重置状态
   useEffect(() => {
@@ -76,13 +78,13 @@ const FloatingWindowContent = ({ settings }: FloatingWindowContentProps) => {
       className="flex flex-col items-center justify-center w-screen h-screen p-2 select-none"
       style={{
         filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.4))",
-        opacity: isIdle ? IDLE_OPACITY : 1,
+        opacity: isIdle ? settings.idleOpacity : 1,
         transition: `opacity ${isIdle ? "0.8s" : "0.15s"} ease`,
       }}
     >
       <div
         ref={cardRef}
-        className="w-full h-full p-2 border border-white/[0.18] rounded-2xl bg-[rgb(20,28,43,0.92)] flex flex-col items-center justify-center"
+        className="w-full h-full p-2 border border-[var(--overlay-border)] rounded-2xl bg-[var(--overlay-bg)] text-[var(--text-primary)] flex flex-col items-center justify-center"
       >
         <VirtualKeyboard inputState={inputState} schemeId={settings.schemeId} />
       </div>

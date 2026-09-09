@@ -2,11 +2,52 @@
 
 @layer base {
   :root {
-    color: #eef4ff;
+    --window-bg: #020617;
+    --panel-bg: #0f172a;
+    --panel-border: #334155;
+    --control-bg: #1e293b;
+    --overlay-bg: rgb(20 28 43 / 92%);
+    --overlay-border: rgb(255 255 255 / 18%);
+    --text-primary: #eef4ff;
+    --text-secondary: #cbd5e1;
+    --key-bg: #1e293b;
+    --key-border: #475569;
+    --initial-text: #f2858c;
+    --final-text: #93bfff;
+    --candidate-bg: #2b2417;
+    --candidate-border: #f6c85f;
+    --candidate-text: #fde68a;
+    --exit-bg: #b91c1c;
+    --exit-border: #ef4444;
+    --accent: #60a5fa;
+    color-scheme: dark;
+    color: var(--text-primary);
     background: transparent;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     /* 运行时由 App.tsx 的 ResizeObserver 根据卡片实际内容区计算并覆盖 */
     --key-size: 60px;
+  }
+
+  :root[data-theme="light"] {
+    --window-bg: #f1f5f9;
+    --panel-bg: #ffffff;
+    --panel-border: #cbd5e1;
+    --control-bg: #e2e8f0;
+    --overlay-bg: rgb(248 250 252 / 94%);
+    --overlay-border: rgb(71 85 105 / 28%);
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --key-bg: #f8fafc;
+    --key-border: #94a3b8;
+    --initial-text: #be123c;
+    --final-text: #1d4ed8;
+    --candidate-bg: #fef3c7;
+    --candidate-border: #d97706;
+    --candidate-text: #92400e;
+    --exit-bg: #dc2626;
+    --exit-border: #b91c1c;
+    --accent: #2563eb;
+    color-scheme: light;
   }
 
   * {

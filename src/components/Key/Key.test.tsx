@@ -7,11 +7,11 @@ describe("Key", () => {
     render(<Key displayState="candidate" finals={["ai"]} label="e" />);
 
     expect(screen.getByRole("button", { name: /e/i })).toHaveClass(
-      "border-[#f6c85f]",
-      "bg-[#2b2417]",
+      "border-[var(--candidate-border)]",
+      "bg-[var(--candidate-bg)]",
     );
     expect(screen.getByText("ai")).toHaveClass(
-      "text-[#fde68a]",
+      "text-[var(--candidate-text)]",
       "font-bold",
       "text-[0.2em]",
     );

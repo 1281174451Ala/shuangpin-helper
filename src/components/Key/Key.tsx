@@ -46,10 +46,10 @@ export const Key = memo(({ label, initial, finals, displayState, candidateMode =
       className={`
         flex flex-col p-[0.075em] border rounded-[0.1em] text-inherit transition-colors duration-200
         ${isExit
-          ? "border-red-500 bg-red-700 cursor-pointer"
+          ? "border-[var(--exit-border)] bg-[var(--exit-bg)] cursor-pointer"
           : isCandidate
-            ? "border-[#f6c85f] bg-[#2b2417] cursor-default"
-            : "border-[#475569] bg-[#1e293b] cursor-default disabled:opacity-28"
+            ? "border-[var(--candidate-border)] bg-[var(--candidate-bg)] cursor-default"
+            : "border-[var(--key-border)] bg-[var(--key-bg)] cursor-default disabled:opacity-28"
         }
       `}
       disabled={isDisabled && !isExit}
@@ -58,7 +58,7 @@ export const Key = memo(({ label, initial, finals, displayState, candidateMode =
       <div className="flex justify-between items-start mb-[0.05em]">
         <span className={`text-[0.1875em] font-semibold ${candidateMode && !isExit ? (isCandidate ? "opacity-60" : "opacity-35") : ""}`}>{label.toUpperCase()}</span>
         {/* 候选态时隐藏全部声母，避免干扰查找韵母 */}
-        {!candidateMode && initial && <small className="text-[#f2858c] text-[0.1625em]">{initial}</small>}
+        {!candidateMode && initial && <small className="text-[var(--initial-text)] text-[0.1625em]">{initial}</small>}
       </div>
       {finals && finals.length > 0 && (
         <div className="flex flex-col items-center gap-[0.05em] w-full">
@@ -66,8 +66,8 @@ export const Key = memo(({ label, initial, finals, displayState, candidateMode =
             <small
               key={index}
               className={`leading-normal ${isCandidate
-                ? `text-[#fde68a] font-bold ${finals.length > 1 ? "text-[0.175em]" : "text-[0.2em]"}`
-                : "text-[#93bfff] text-[0.1375em]"
+                ? `text-[var(--candidate-text)] font-bold ${finals.length > 1 ? "text-[0.175em]" : "text-[0.2em]"}`
+                : "text-[var(--final-text)] text-[0.1375em]"
               }`}
             >
               {final}
