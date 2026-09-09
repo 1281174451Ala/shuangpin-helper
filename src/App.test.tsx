@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import type { ApplicationSettings } from "./store/applicationSettings";
@@ -237,6 +237,7 @@ describe("App", () => {
     render(<App />);
 
     await waitFor(() => expect(mocks.invokedCommands).toContain("get_application_settings"));
+    expect(document.querySelector("main")).toHaveClass("h-screen", "overflow-y-auto");
     expect(screen.getByText("当前方案")).toBeInTheDocument();
     expect(await screen.findByText("小鹤双拼")).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "双拼虚拟键盘" })).not.toBeInTheDocument();
@@ -246,7 +247,11 @@ describe("App", () => {
     window.history.pushState({}, "", "/?window=settings");
     render(<App />);
 
-    expect(await screen.findAllByRole("radio")).toHaveLength(3);
+    const appearanceGroup = await screen.findByRole("group", { name: "外观模式" });
+    expect(within(appearanceGroup).getAllByRole("radio")).toHaveLength(3);
+    expect(
+      within(appearanceGroup).getByRole("radio", { name: "跟随系统" }).closest("label"),
+    ).toHaveClass("whitespace-nowrap");
     fireEvent.click(await screen.findByRole("radio", { name: "浅色" }));
 
     await waitFor(() => expect(mocks.savedSettings[mocks.savedSettings.length - 1]).toMatchObject({
@@ -256,25 +261,57 @@ describe("App", () => {
     expect(screen.queryByRole("button", { name: /保存|取消/ })).not.toBeInTheDocument();
   });
 
-  it("offers only valid idle fade delays and opacity increments", async () => {
+  it("uses radios and a bounded number input for idle fading", async () => {
     window.history.pushState({}, "", "/?window=settings");
     render(<App />);
 
-    const delaySelect = await screen.findByLabelText("空闲淡化");
+    const fadeGroup = await screen.findByRole("group", { name: "空闲淡化" });
+    const fadeRadio = within(fadeGroup).getByRole("radio", { name: "淡化" });
+    const noFadeRadio = within(fadeGroup).getByRole("radio", { name: "不淡化" });
+    const delayInput = within(fadeGroup).getByRole("spinbutton", { name: "淡化延时（秒）" });
     const opacityInput = screen.getByLabelText("空闲透明度");
-    expect(delaySelect).toHaveValue("3000");
+    expect(fadeRadio).toBeChecked();
+    expect(noFadeRadio).not.toBeChecked();
+    expect(delayInput).toHaveValue(3);
+    expect(delayInput).toHaveAttribute("min", "1");
+    expect(delayInput).toHaveAttribute("max", "30");
+    expect(delayInput).toHaveAttribute("step", "1");
+    expect(screen.queryByRole("combobox", { name: "空闲淡化" })).not.toBeInTheDocument();
     expect(opacityInput).toHaveValue("30");
-    expect(delaySelect.querySelectorAll("option")).toHaveLength(31);
-    expect(delaySelect).toContainHTML('<option value="1000">1 秒</option>');
-    expect(delaySelect).toContainHTML('<option value="30000">30 秒</option>');
     expect(opacityInput).toHaveAttribute("min", "20");
     expect(opacityInput).toHaveAttribute("max", "100");
     expect(opacityInput).toHaveAttribute("step", "5");
 
-    fireEvent.change(delaySelect, { target: { value: "none" } });
+    fireEvent.change(delayInput, { target: { value: "12" } });
+    await waitFor(() => expect(mocks.savedSettings[mocks.savedSettings.length - 1]).toMatchObject({
+      idleFadeDelayMs: 12_000,
+    }));
+
+    fireEvent.click(noFadeRadio);
     await waitFor(() => expect(mocks.savedSettings[mocks.savedSettings.length - 1]).toMatchObject({
       idleFadeDelayMs: null,
     }));
+    expect(delayInput).toBeDisabled();
+    expect(delayInput).toHaveValue(12);
+
+    fireEvent.click(fadeRadio);
+    await waitFor(() => expect(mocks.savedSettings[mocks.savedSettings.length - 1]).toMatchObject({
+      idleFadeDelayMs: 12_000,
+    }));
+    expect(delayInput).toBeEnabled();
+
+    fireEvent.change(delayInput, { target: { value: "30" } });
+    await waitFor(() => expect(mocks.savedSettings[mocks.savedSettings.length - 1]).toMatchObject({
+      idleFadeDelayMs: 30_000,
+    }));
+
+    const validSaveCount = mocks.savedSettings.length;
+    fireEvent.change(delayInput, { target: { value: "31" } });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(mocks.savedSettings).toHaveLength(validSaveCount);
 
     fireEvent.change(opacityInput, { target: { value: "55" } });
     await waitFor(() => expect(mocks.savedSettings[mocks.savedSettings.length - 1]).toMatchObject({

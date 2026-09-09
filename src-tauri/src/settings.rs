@@ -156,6 +156,8 @@ mod tests {
         let store = ApplicationSettingsStore::new(path.clone());
         let settings = ApplicationSettings {
             appearance: "dark".to_owned(),
+            idle_fade_delay_ms: None,
+            idle_opacity: 0.55,
             ..ApplicationSettings::default()
         };
 

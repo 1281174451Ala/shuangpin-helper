@@ -74,8 +74,8 @@ fn settings_window_action(window_exists: bool) -> SettingsWindowAction {
         label: "settings",
         url: "index.html?window=settings",
         title: "双拼辅助键盘设置",
-        width: 420.0,
-        height: 280.0,
+        width: 480.0,
+        height: 480.0,
         focused: true,
         resizable: false,
         always_on_top: false,
@@ -445,6 +445,8 @@ mod tests {
 
         assert_eq!(spec.label, "settings");
         assert_eq!(spec.url, "index.html?window=settings");
+        assert_eq!(spec.width, 480.0);
+        assert_eq!(spec.height, 480.0);
         assert!(spec.focused);
         assert!(!spec.always_on_top);
         assert!(!spec.resizable);
