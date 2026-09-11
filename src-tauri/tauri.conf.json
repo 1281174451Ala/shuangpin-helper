@@ -19,6 +19,8 @@
         "height": 240,
         "resizable": true,
         "alwaysOnTop": true,
+        "focus": false,
+        "focusable": false,
         "decorations": false,
         "transparent": true,
         "acceptFirstMouse": true

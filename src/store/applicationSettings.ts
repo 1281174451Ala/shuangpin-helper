@@ -31,6 +31,8 @@ interface ApplicationSettingsState {
   settings: ApplicationSettings | null;
   /** 读取失败原因 */
   error: Error | null;
+  /** 最近一次设置写入失败原因 */
+  saveError: Error | null;
   /** 本次启动是否从无效设置恢复 */
   recoveredFromInvalidSettings: boolean;
   /** 立即预览并尝试持久化一份完整设置 */
@@ -84,6 +86,7 @@ export const subscribeApplicationSettings = (
 export const useApplicationSettings = (): ApplicationSettingsState => {
   const [settings, setSettings] = useState<ApplicationSettings | null>(null); //当前应用设置
   const [error, setError] = useState<Error | null>(null); //设置读取错误
+  const [saveError, setSaveError] = useState<Error | null>(null); //设置写入错误
   const [recoveredFromInvalidSettings, setRecoveredFromInvalidSettings] = useState(false); //设置恢复状态
   const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve()); //设置持久化队列
 
@@ -92,7 +95,16 @@ export const useApplicationSettings = (): ApplicationSettingsState => {
     setSettings(nextSettings);
     const saveRequest = saveQueueRef.current
       .catch(() => undefined)
-      .then(() => saveApplicationSettings(nextSettings));
+      .then(() => saveApplicationSettings(nextSettings))
+      .then((savedSettings) => {
+        setSaveError(null);
+        return savedSettings;
+      })
+      .catch((reason: unknown) => {
+        const nextError = reason instanceof Error ? reason : new Error(String(reason));
+        setSaveError(nextError);
+        throw nextError;
+      });
     saveQueueRef.current = saveRequest;
     return saveRequest;
   }, []); //即时应用设置
@@ -139,5 +151,5 @@ export const useApplicationSettings = (): ApplicationSettingsState => {
     };
   }, []);
 
-  return { settings, error, recoveredFromInvalidSettings, updateSettings };
+  return { settings, error, saveError, recoveredFromInvalidSettings, updateSettings };
 };

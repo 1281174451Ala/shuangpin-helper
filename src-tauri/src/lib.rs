@@ -301,7 +301,6 @@ fn show_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.unminimize();
         let _ = window.show();
-        let _ = window.set_focus();
         sync_window_toggle_text(app, window.is_visible().unwrap_or(true));
     }
     key_listener::start_listening(app.clone());
@@ -381,7 +380,7 @@ fn get_listener_status() -> bool {
 fn get_application_settings(
     settings_store: tauri::State<ApplicationSettingsStore>,
 ) -> ApplicationSettings {
-    settings_store.load()
+    settings_store.current()
 }
 
 /// 查询本次启动是否曾从无效应用设置恢复。
@@ -392,6 +391,35 @@ fn get_application_settings_recovery_status(
     settings_store.recovered_from_invalid_settings()
 }
 
+/// 接受运行时设置，并在写盘成功或失败后通知所有窗口。
+fn save_settings_change<F>(
+    settings_store: &ApplicationSettingsStore,
+    settings: ApplicationSettings,
+    emit: F,
+) -> Result<ApplicationSettings, String>
+where
+    F: FnOnce(&ApplicationSettings) -> Result<(), String>,
+{
+    if !settings.is_supported() {
+        return settings_store
+            .save(&settings)
+            .map_err(|error| error.to_string());
+    }
+
+    let save_result = settings_store.save(&settings);
+    let emit_result = emit(&settings);
+    match save_result {
+        Ok(saved_settings) => {
+            let _ = emit_result;
+            Ok(saved_settings)
+        }
+        Err(error) => {
+            let _ = emit_result;
+            Err(error.to_string())
+        }
+    }
+}
+
 /// 保存应用设置并在下一次启动时恢复。
 #[tauri::command]
 fn save_application_settings(
@@ -399,12 +427,10 @@ fn save_application_settings(
     settings_store: tauri::State<ApplicationSettingsStore>,
     settings: ApplicationSettings,
 ) -> Result<ApplicationSettings, String> {
-    let saved_settings = settings_store
-        .save(&settings)
-        .map_err(|error| error.to_string())?;
-    app.emit(APPLICATION_SETTINGS_CHANGED_EVENT, &saved_settings)
-        .map_err(|error| error.to_string())?;
-    Ok(saved_settings)
+    save_settings_change(&settings_store, settings, |current_settings| {
+        app.emit(APPLICATION_SETTINGS_CHANGED_EVENT, current_settings)
+            .map_err(|error| error.to_string())
+    })
 }
 
 /// 隐藏主窗口并暂停全局按键转发。
@@ -421,7 +447,15 @@ fn exit_app(app: AppHandle) {
 
 #[cfg(test)]
 mod tests {
-    use super::{settings_window_action, window_toggle_text, SettingsWindowAction};
+    use super::{
+        save_settings_change, settings_window_action, window_toggle_text, ApplicationSettings,
+        ApplicationSettingsStore, SettingsWindowAction,
+    };
+    use std::{
+        cell::RefCell,
+        fs,
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     #[test]
     fn window_toggle_text_describes_the_next_action() {
@@ -450,5 +484,64 @@ mod tests {
         assert!(spec.focused);
         assert!(!spec.always_on_top);
         assert!(!spec.resizable);
+    }
+
+    #[test]
+    fn floating_window_cannot_take_keyboard_focus() {
+        let config: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
+            .expect("Tauri config should be valid JSON");
+        let main_window = &config["app"]["windows"][0];
+
+        assert_eq!(main_window["label"], "main");
+        assert_eq!(main_window["focus"], false);
+        assert_eq!(main_window["focusable"], false);
+    }
+
+    #[test]
+    fn broadcasts_runtime_settings_when_persistence_fails() {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        let blocked_parent = std::env::temp_dir().join(format!("blocked-settings-{suffix}"));
+        fs::write(&blocked_parent, b"not a directory").expect("blocking file should be written");
+        let store = ApplicationSettingsStore::new(blocked_parent.join("settings.json"));
+        let settings = ApplicationSettings {
+            appearance: "dark".to_owned(),
+            ..ApplicationSettings::default()
+        };
+        let emitted_settings = RefCell::new(None);
+
+        let result = save_settings_change(&store, settings.clone(), |payload| {
+            emitted_settings.replace(Some(payload.clone()));
+            Ok(())
+        });
+
+        assert!(result.is_err());
+        assert_eq!(store.current(), settings);
+        assert_eq!(emitted_settings.into_inner(), Some(settings));
+        let _ = fs::remove_file(blocked_parent);
+    }
+
+    #[test]
+    fn reports_success_when_settings_persist_but_broadcast_fails() {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("saved-settings-{suffix}.json"));
+        let store = ApplicationSettingsStore::new(path.clone());
+        let settings = ApplicationSettings {
+            appearance: "dark".to_owned(),
+            ..ApplicationSettings::default()
+        };
+
+        let result = save_settings_change(&store, settings.clone(), |_| {
+            Err("event unavailable".to_owned())
+        });
+
+        assert_eq!(result, Ok(settings.clone()));
+        assert_eq!(ApplicationSettingsStore::new(path.clone()).load(), settings);
+        let _ = fs::remove_file(path);
     }
 }

@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   } as ApplicationSettings,
   /** 本次启动是否从无效设置恢复。 */
   recoveredFromInvalidSettings: false,
+  /** 保存应用设置时返回的错误。 */
+  saveSettingsError: null as Error | null,
   /** get_listener_status 的返回值，模拟后端监听是否已启动。 */
   listenerStatus: false,
   /** 按事件名捕获的 listen 回调，用于模拟 Rust 主动推送。 */
@@ -35,6 +37,7 @@ vi.mock("@tauri-apps/api/core", () => ({
     }
     if (cmd === "save_application_settings" && args?.settings) {
       mocks.savedSettings.push(args.settings);
+      if (mocks.saveSettingsError) return Promise.reject(mocks.saveSettingsError);
       mocks.applicationSettings = args.settings;
       return Promise.resolve(args.settings);
     }
@@ -82,6 +85,7 @@ beforeEach(() => {
   };
   mocks.listenerStatus = false;
   mocks.recoveredFromInvalidSettings = false;
+  mocks.saveSettingsError = null;
   mocks.handlers = {};
   mocks.invokedCommands.length = 0;
   mocks.savedSettings.length = 0;
@@ -328,6 +332,19 @@ describe("App", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(
       "设置文件无效，已恢复默认设置并保留诊断副本",
     );
+  });
+
+  it("reports a save failure while keeping the current preview", async () => {
+    mocks.saveSettingsError = new Error("disk full");
+    window.history.pushState({}, "", "/?window=settings");
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("radio", { name: "深色" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "未能保存设置。本次预览仍然有效，下次启动将恢复旧设置",
+    );
+    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
   });
 
   it("renders candidate keys after a first letter and resets after the second letter", async () => {

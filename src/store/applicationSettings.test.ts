@@ -125,6 +125,35 @@ describe("applicationSettings bridge", () => {
     });
   });
 
+  it("keeps the runtime preview and reports a persistence failure", async () => {
+    const initialSettings: ApplicationSettings = {
+      version: 1,
+      schemeId: "xiaohe",
+      appearance: "system",
+      idleFadeDelayMs: 3000,
+      idleOpacity: 0.3,
+    };
+    const changedSettings: ApplicationSettings = { ...initialSettings, appearance: "dark" };
+    mocks.invoke.mockImplementation((command) => {
+      if (command === "save_application_settings") {
+        return Promise.reject(new Error("disk full"));
+      }
+      return Promise.resolve(
+        command === "get_application_settings_recovery_status" ? false : initialSettings,
+      );
+    });
+    mocks.listen.mockResolvedValue(() => {});
+    const { result } = renderHook(() => useApplicationSettings());
+    await waitFor(() => expect(result.current.settings).toEqual(initialSettings));
+
+    await act(async () => {
+      await expect(result.current.updateSettings(changedSettings)).rejects.toThrow("disk full");
+    });
+
+    expect(result.current.settings).toEqual(changedSettings);
+    expect(result.current.saveError).toEqual(new Error("disk full"));
+  });
+
   it("serializes rapid settings writes while keeping the latest preview", async () => {
     const initialSettings: ApplicationSettings = {
       version: 1,

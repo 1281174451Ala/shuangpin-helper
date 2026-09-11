@@ -2,7 +2,10 @@ use serde::{Deserialize, Serialize};
 use std::{
     fs, io,
     path::PathBuf,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex, RwLock,
+    },
 };
 
 /// 应用设置文件名。
@@ -42,7 +45,7 @@ impl Default for ApplicationSettings {
 
 impl ApplicationSettings {
     /// 判断设置版本、方案及所有偏好值是否受当前应用版本支持。
-    fn is_supported(&self) -> bool {
+    pub(crate) fn is_supported(&self) -> bool {
         let delay_is_valid = match self.idle_fade_delay_ms {
             None => true,
             Some(delay) => (1_000..=30_000).contains(&delay) && delay % 1_000 == 0,
@@ -65,6 +68,10 @@ impl ApplicationSettings {
 pub(crate) struct ApplicationSettingsStore {
     /// 设置文件路径。
     path: PathBuf,
+    /// 本次运行使用的设置；写入失败时仍保留最新预览。
+    current: RwLock<ApplicationSettings>,
+    /// 串行化来自多个窗口的完整原子写入事务。
+    save_lock: Mutex<()>,
     /// 本次运行是否从无效设置恢复。
     recovered_from_invalid_settings: AtomicBool,
 }
@@ -74,35 +81,49 @@ impl ApplicationSettingsStore {
     pub(crate) fn new(path: PathBuf) -> Self {
         Self {
             path,
+            current: RwLock::new(ApplicationSettings::default()),
+            save_lock: Mutex::new(()),
             recovered_from_invalid_settings: AtomicBool::new(false),
         }
     }
 
     /// 读取设置；文件缺失或损坏时使用默认设置。
     pub(crate) fn load(&self) -> ApplicationSettings {
-        let contents = match fs::read_to_string(&self.path) {
+        let contents = match fs::read(&self.path) {
             Ok(contents) => contents,
             Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                return ApplicationSettings::default()
+                let settings = ApplicationSettings::default();
+                *self.current.write().expect("settings write lock") = settings.clone();
+                return settings;
             }
             Err(_) => {
+                let _ = fs::copy(&self.path, self.path.with_extension("invalid.json"));
                 self.recovered_from_invalid_settings
                     .store(true, Ordering::Relaxed);
-                return ApplicationSettings::default();
+                let settings = ApplicationSettings::default();
+                *self.current.write().expect("settings write lock") = settings.clone();
+                return settings;
             }
         };
-        let parsed = serde_json::from_str::<ApplicationSettings>(&contents)
+        let parsed = serde_json::from_slice::<ApplicationSettings>(&contents)
             .ok()
             .filter(ApplicationSettings::is_supported);
 
-        if let Some(settings) = parsed {
-            return settings;
-        }
+        let settings = if let Some(settings) = parsed {
+            settings
+        } else {
+            let _ = fs::write(self.path.with_extension("invalid.json"), contents);
+            self.recovered_from_invalid_settings
+                .store(true, Ordering::Relaxed);
+            ApplicationSettings::default()
+        };
+        *self.current.write().expect("settings write lock") = settings.clone();
+        settings
+    }
 
-        let _ = fs::write(self.path.with_extension("invalid.json"), contents);
-        self.recovered_from_invalid_settings
-            .store(true, Ordering::Relaxed);
-        ApplicationSettings::default()
+    /// 返回本次运行当前使用的设置。
+    pub(crate) fn current(&self) -> ApplicationSettings {
+        self.current.read().expect("settings read lock").clone()
     }
 
     /// 返回本次运行是否曾因设置无效而回退默认值。
@@ -118,6 +139,8 @@ impl ApplicationSettingsStore {
                 "unsupported settings version or scheme",
             ));
         }
+        let _save_guard = self.save_lock.lock().expect("settings save lock");
+        *self.current.write().expect("settings write lock") = settings.clone();
         if let Some(parent) = self.path.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -132,7 +155,11 @@ impl ApplicationSettingsStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::{
+        sync::{Arc, Barrier},
+        thread,
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     /// 创建测试独占的设置文件路径。
     fn temporary_settings_path() -> PathBuf {
@@ -169,6 +196,70 @@ mod tests {
     }
 
     #[test]
+    fn keeps_runtime_settings_when_writing_fails() {
+        let path = temporary_settings_path();
+        let temporary_path = path.with_extension("tmp");
+        let store = ApplicationSettingsStore::new(path.clone());
+        let old_settings = ApplicationSettings::default();
+        store
+            .save(&old_settings)
+            .expect("initial settings should persist");
+        fs::create_dir(&temporary_path).expect("temporary path should block the next write");
+        let changed_settings = ApplicationSettings {
+            appearance: "dark".to_owned(),
+            ..old_settings.clone()
+        };
+
+        store
+            .save(&changed_settings)
+            .expect_err("blocked temporary path should fail the write");
+
+        assert_eq!(store.current(), changed_settings);
+        assert_eq!(
+            ApplicationSettingsStore::new(path.clone()).load(),
+            old_settings
+        );
+        let _ = fs::remove_dir(temporary_path);
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn serializes_writes_from_multiple_windows() {
+        let path = temporary_settings_path();
+        let store = Arc::new(ApplicationSettingsStore::new(path.clone()));
+        let opacity_values = (20..=100).step_by(5).collect::<Vec<_>>();
+        let barrier = Arc::new(Barrier::new(opacity_values.len()));
+        let handles = opacity_values
+            .into_iter()
+            .map(|opacity| {
+                let store = Arc::clone(&store);
+                let barrier = Arc::clone(&barrier);
+                thread::spawn(move || {
+                    let settings = ApplicationSettings {
+                        idle_opacity: f64::from(opacity) / 100.0,
+                        ..ApplicationSettings::default()
+                    };
+                    barrier.wait();
+                    store.save(&settings)
+                })
+            })
+            .collect::<Vec<_>>();
+
+        for handle in handles {
+            handle
+                .join()
+                .expect("settings writer should not panic")
+                .expect("concurrent settings write should succeed");
+        }
+
+        assert_eq!(
+            store.current(),
+            ApplicationSettingsStore::new(path.clone()).load()
+        );
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
     fn serializes_application_settings_for_the_frontend_bridge() {
         let value =
             serde_json::to_value(ApplicationSettings::default()).expect("settings serialize");
@@ -195,6 +286,24 @@ mod tests {
         assert_eq!(
             fs::read_to_string(&diagnostic_path).expect("diagnostic copy should be retained"),
             r#"{"version":1,"schemeId":"unknown","appearance":"system","idleFadeDelayMs":3000,"idleOpacity":0.3}"#,
+        );
+        let _ = fs::remove_file(path);
+        let _ = fs::remove_file(diagnostic_path);
+    }
+
+    #[test]
+    fn retains_non_utf8_settings_as_a_diagnostic_copy() {
+        let path = temporary_settings_path();
+        let diagnostic_path = path.with_extension("invalid.json");
+        let invalid_contents = [0xff, 0xfe, 0xfd];
+        fs::write(&path, invalid_contents).expect("invalid settings fixture should be written");
+        let store = ApplicationSettingsStore::new(path.clone());
+
+        assert_eq!(store.load(), ApplicationSettings::default());
+        assert!(store.recovered_from_invalid_settings());
+        assert_eq!(
+            fs::read(&diagnostic_path).expect("diagnostic copy should be retained"),
+            invalid_contents,
         );
         let _ = fs::remove_file(path);
         let _ = fs::remove_file(diagnostic_path);

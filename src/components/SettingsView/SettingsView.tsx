@@ -27,7 +27,13 @@ const appearanceOptions: ReadonlyArray<AppearanceOption> = [
  * @returns 设置窗口内容
  */
 export const SettingsView = () => {
-  const { settings, error, recoveredFromInvalidSettings, updateSettings } = useApplicationSettings(); //原生应用设置
+  const {
+    settings,
+    error,
+    saveError,
+    recoveredFromInvalidSettings,
+    updateSettings,
+  } = useApplicationSettings(); //原生应用设置
   const resolvedAppearance = useResolvedAppearance(settings?.appearance ?? "system"); //当前有效外观
   const lastIdleFadeDelayMsRef = useRef(3000); //最近一次启用淡化时的延时
   const schemeName = listShuangpinSchemes().find(({ id }) => id === settings?.schemeId)?.displayName;
@@ -35,7 +41,7 @@ export const SettingsView = () => {
   /** 立即预览并持久化设置字段；失败留待设置恢复流程提示。 */
   const persistSettings = (patch: Partial<ApplicationSettings>) => {
     if (!settings) return;
-    void updateSettings({ ...settings, ...patch }).catch(console.error);
+    void updateSettings({ ...settings, ...patch }).catch(() => undefined);
   };
 
   /** 更新外观模式。 */
@@ -85,6 +91,11 @@ export const SettingsView = () => {
         {recoveredFromInvalidSettings && (
           <p role="status" className="rounded-lg bg-amber-950 px-4 py-3 text-sm text-amber-100">
             设置文件无效，已恢复默认设置并保留诊断副本。
+          </p>
+        )}
+        {saveError && (
+          <p role="alert" className="rounded-lg bg-red-950 px-4 py-3 text-sm text-red-100">
+            未能保存设置。本次预览仍然有效，下次启动将恢复旧设置。
           </p>
         )}
         <div className="flex items-center justify-between rounded-lg bg-[var(--control-bg)] px-4 py-3">
